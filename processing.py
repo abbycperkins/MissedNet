@@ -2,11 +2,13 @@ import pandas as pd
 import librosa
 import sounddevice as sd
 import sys
+import matplotlib.pyplot as plt
+import numpy as np
 from PyQt5 import QtCore
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QTreeWidget, QLabel, QDialogButtonBox, QFormLayout,
-    QTreeWidgetItem, QPushButton, QMessageBox, QFileDialog, QLineEdit, QDialog, QComboBox,
+    QTreeWidgetItem, QPushButton, QMessageBox, QFileDialog, QLineEdit, QDialog, QComboBox, qApp
 )
 from datetime import datetime
 from pathlib import Path
@@ -50,11 +52,23 @@ class Settings(QMainWindow):
 class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
+        plt.ioff()
         self.setWindowTitle("Audio Analysis")
+        self.setFixedSize(600, 400)
         layout = QVBoxLayout()
 
         self.settings = Settings(self)
         self.settings.runAnalysis.connect(self.run_analysis)
+
+        self.image_label = QLabel()
+        layout.addWidget(self.image_label)
+        self.image_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
+
+        self.species_label = QLabel("Species Name")
+        self.species_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+
+        layout.addWidget(self.species_label)
+        self.species_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
         goodID = QPushButton('Good Identification')
         badID = QPushButton('Not Confirmed')
@@ -64,8 +78,8 @@ class AudioAnalysis(QMainWindow):
         layout.addWidget(badID)
         layout.addWidget(repeat)
 
-        goodID.pressed.connect(lambda: self.play_sound())
-        badID.pressed.connect(lambda: self.play_sound())
+        goodID.pressed.connect(lambda: self.goodID_next_sound())
+        badID.pressed.connect(lambda: self.badID_next_sound())
         repeat.pressed.connect(lambda: self.play_sound_again())
 
         central_widget = QWidget()
@@ -81,32 +95,85 @@ class AudioAnalysis(QMainWindow):
         self.audio_files = None
         self.selection_df_final = None
         self.species_list = None
+        self.species_detections = None
 
     def start(self) -> None:
         self.settings.show()
 
-    def firstsound(self):
-        self.species_list = self.selection_df_final[self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score', ascending=False)
+    def first_sound(self):
+        self.species_detections = self.selection_df_final[self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score', ascending=False)
 
-        # TODO show species somewhere
-        self.detection = self.species_list.iloc[self.counter]
+        self.detection = self.species_detections.iloc[self.counter]
+
+        # Update species label
+        self.species_label.setText(self.detection[8])
+
         start_time = self.detection[3]
         end_time = self.detection[4]
         y, sr = self.audio_files[self.detection[9]]
         part = y[int(start_time * sr):int(end_time * sr)]
 
+        # Update QPixmap
+
+        hop_length = 1024
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(part, hop_length=hop_length)),
+                                    ref=np.max)
+        plt.figure(figsize=(4, 2))
+        librosa.display.specshow(D, y_axis='log', sr=sr, hop_length=hop_length, x_axis='time')
+
+        plt.tight_layout()
+        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
+        plt.close()
+
+        pixmap = QPixmap("temp_image.png")
+        scaled_pixmap = pixmap.scaled(300, 200)
+        self.image_label.setPixmap(scaled_pixmap)
+
+        qApp.processEvents()
         sd.wait()
         sd.play(part, sr)
         sd.wait()
 
     def goodID_next_sound(self):
-        start_time = self.detection[4]
-        end_time = self.detection[5]
-        y, sr = self.audio_files[self.detection[10]]
+        # move on to next species
+        self.species_counter = self.species_counter + 1
+        self.counter = 0
+
+        if self.species_counter == len(self.species_list):
+            msg = QMessageBox()
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.setText('Audio Analysis completed! Quit and view your output file.')
+            msg.setWindowTitle('Complete!')
+            msg.exec_()
+        else:
+            self.species_detections = self.selection_df_final[self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score', ascending=False)
+
+        self.detection = self.species_detections.iloc[self.counter]
+
+        # Update species label
+        self.species_label.setText(self.detection[8])
+
+        start_time = self.detection[3]
+        end_time = self.detection[4]
+        y, sr = self.audio_files[self.detection[9]]
         part = y[int(start_time * sr):int(end_time * sr)]
 
-        # Next species
-        # TODO first sound
+        # Update QPixmap
+
+        hop_length = 1024
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(part, hop_length=hop_length)),
+                                    ref=np.max)
+        plt.figure(figsize=(4, 2))
+        librosa.display.specshow(D, y_axis='log', sr=sr, hop_length=hop_length, x_axis='time')
+
+        plt.tight_layout()
+        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0)
+        plt.close()
+
+        pixmap = QPixmap("temp_image.png")
+        scaled_pixmap = pixmap.scaled(300, 200)
+        self.image_label.setPixmap(scaled_pixmap)
+        qApp.processEvents()
 
         sd.wait()
         sd.play(part, sr)
@@ -114,21 +181,58 @@ class AudioAnalysis(QMainWindow):
 
 
     def badID_next_sound(self):
-        start_time = self.detection[4]
-        end_time = self.detection[5]
-        y, sr = self.audio_files[self.detection[10]]
+        self.counter = self.counter + 1
+        if self.counter == self.species_detections.shape[0]:
+            self.species_counter = self.species_counter + 1
+            self.counter = 0
+            self.species_detections = self.selection_df_final[
+                self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score',
+                                                                                                         ascending=False)
+            if self.species_counter == len(self.species_list):
+                msg = QMessageBox()
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.setText('Audio Analysis completed! Quit and view your output file.')
+                msg.setWindowTitle('Complete!')
+                msg.exec_()
+            self.detection = self.species_detections.iloc[self.counter]
+
+            # Update species label
+            self.species_label.setText(self.detection[8])
+        else:
+            self.detection = self.species_detections.iloc[self.counter]
+
+        start_time = self.detection[3]
+        end_time = self.detection[4]
+        y, sr = self.audio_files[self.detection[9]]
         part = y[int(start_time * sr):int(end_time * sr)]
+
+        # Update QPixmap
+
+        hop_length = 1024
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(part, hop_length=hop_length)),
+                                    ref=np.max)
+        plt.figure(figsize=(4, 2))
+        librosa.display.specshow(D, y_axis='log', sr=sr, hop_length=hop_length, x_axis='time')
+
+        plt.tight_layout()
+        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0)
+        plt.close()
+
+        pixmap = QPixmap("temp_image.png")
+        scaled_pixmap = pixmap.scaled(300, 200)
+        self.image_label.setPixmap(scaled_pixmap)
+        qApp.processEvents()
 
         sd.wait()
         sd.play(part, sr)
         sd.wait()
-        self.counter = self.counter + 1
 
     def play_sound_again(self):
-        start_time = self.detection[4]
-        end_time = self.detection[5]
-        y, sr = self.audio_files[self.detection[10]]
+        start_time = self.detection[3]
+        end_time = self.detection[4]
+        y, sr = self.audio_files[self.detection[9]]
         part = y[int(start_time * sr):int(end_time * sr)]
+        qApp.processEvents()
 
         sd.wait()
         sd.play(part, sr)
@@ -166,17 +270,16 @@ class AudioAnalysis(QMainWindow):
             df['Date'] = week_list
             self.output = df.drop_duplicates(subset='Date')
 
-        if self.time == 'Year':
-            year_list = []
+        if self.time == 'Month':
+            month_list = []
             for x in date_list:
-                year_list.append(x.strftime('%Y'))
-            df['Date'] = year_list
+                month_list.append(x.strftime('%b-%Y'))
+            df['Date'] = month_list
             self.output = df.drop_duplicates(subset='Date')
 
         for period in self.output['Date']:
             selection_df_list = []
             self.audio_files = {}
-            txt_path = []
 
             # Find the selection files
             period_files = df[df['Date'] == period]
@@ -198,7 +301,7 @@ class AudioAnalysis(QMainWindow):
             for file in period_files['PATH']:
                 wav_path = list(data_path.glob(f'*{file}*'))
                 self.audio_files[file] = librosa.load(wav_path[0])
-        self.firstsound()
+            self.first_sound()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
