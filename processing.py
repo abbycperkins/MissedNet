@@ -82,6 +82,8 @@ class AudioAnalysis(QMainWindow):
         badID.pressed.connect(lambda: self.badID_next_sound())
         repeat.pressed.connect(lambda: self.play_sound_again())
 
+        # TODO add button to open webpage similar to https://www.allaboutbirds.org/guide/Golden-crowned_Kinglet/sounds
+
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
@@ -139,7 +141,7 @@ class AudioAnalysis(QMainWindow):
         sd.wait()
 
     def goodID_next_sound(self):
-        self.output.loc[self.period_counter, self.detection[8]] = 'Present'
+        self.output.at[self.period_counter, self.detection[8]] = 'Confirmed Present'
         # move on to next species
         self.species_counter = self.species_counter + 1
         self.counter = 0
@@ -184,7 +186,7 @@ class AudioAnalysis(QMainWindow):
     def badID_next_sound(self):
         self.counter = self.counter + 1
         if self.counter == self.species_detections.shape[0]:
-            self.output.loc[self.period_counter, self.detection[8]] = 'Failed Verification'
+            self.output.at[self.period_counter, self.detection[8]] = 'Failed Verification'
             self.species_counter = self.species_counter + 1
             self.counter = 0
             if self.species_counter == len(self.species_list):
@@ -262,6 +264,7 @@ class AudioAnalysis(QMainWindow):
         if self.time == 'Day':
             self.df['Date'] = date_list
             self.output = self.df.drop_duplicates(subset='Date')
+            self.output = self.output.reset_index(drop=True)
 
         if self.time == 'Week':
             week_list = []
@@ -269,6 +272,7 @@ class AudioAnalysis(QMainWindow):
                 week_list.append(x.strftime('%U-%Y'))
             self.df['Date'] = week_list
             self.output = self.df.drop_duplicates(subset='Date')
+            self.output = self.output.reset_index(drop=True)
 
         if self.time == 'Month':
             month_list = []
@@ -276,6 +280,7 @@ class AudioAnalysis(QMainWindow):
                 month_list.append(x.strftime('%b-%Y'))
             self.df['Date'] = month_list
             self.output = self.df.drop_duplicates(subset='Date')
+            self.output = self.output.reset_index(drop=True)
 
         self.initialize_period()
 
@@ -298,8 +303,7 @@ class AudioAnalysis(QMainWindow):
             self.audio_files = {}
 
             # Find the selection files
-            period_files = self.df[self.df['Date'] == self.output.loc[self.period_counter, 'Date']]
-
+            period_files = self.df[self.df['Date'] == self.output.iloc[self.period_counter]['Date']]
             for file in period_files['PATH']:
                 selection_df= pd.read_csv(list(self.selection_path.glob(f'*{file}*'))[0], delimiter='\t')
                 selection_df['File'] = file
@@ -307,23 +311,25 @@ class AudioAnalysis(QMainWindow):
 
             selection_df = pd.concat(selection_df_list, ignore_index=True)
             self.selection_df_final = []
+            if 'Label' in selection_df.columns:
+                for index, row in selection_df.iterrows():
+                    if not row['Label'].islower(): # weird bug in Raven Pro where sometimes species names are abbreviated ex: baleag == Bald Eagle
+                        self.selection_df_final.append(row)
+                self.selection_df_final = pd.DataFrame(self.selection_df_final)
+                self.species_list = self.selection_df_final.loc[:, 'Label'].unique()
 
-            for index, row in selection_df.iterrows():
-                if not row['Label'].islower(): # weird bug in Raven Pro where sometimes species names are abbreviated ex: baleag == Bald Eagle
-                    self.selection_df_final.append(row)
-            self.selection_df_final = pd.DataFrame(self.selection_df_final)
-            self.species_list = self.selection_df_final['Label'].unique()
+                for spec in self.species_list:
+                    if 'spec' in self.output.columns:
+                        continue
+                    else: self.output[spec] = 'Not Detected'
 
-            for spec in self.species_list:
-                if 'spec' in self.output.columns:
-                    continue
-                else: self.output[spec] = 'Not Detected'
+                for file in period_files['PATH']:
+                    wav_path = list(self.data_path.glob(f'*{file}*'))
+                    self.audio_files[file] = librosa.load(wav_path[0])
 
-            for file in period_files['PATH']:
-                wav_path = list(self.data_path.glob(f'*{file}*'))
-                self.audio_files[file] = librosa.load(wav_path[0])
-
-            self.first_sound()
+                self.first_sound()
+            else:
+                self.initialize_period()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
