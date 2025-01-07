@@ -92,10 +92,14 @@ class AudioAnalysis(QMainWindow):
         self.detection = None
         self.counter = 0
         self.species_counter = 0
+        self.period_counter = -1
         self.audio_files = None
         self.selection_df_final = None
         self.species_list = None
         self.species_detections = None
+        self.df = None
+        self.data_path = None
+        self.selection_path = None
 
     def start(self) -> None:
         self.settings.show()
@@ -135,16 +139,13 @@ class AudioAnalysis(QMainWindow):
         sd.wait()
 
     def goodID_next_sound(self):
+        self.output.loc[self.period_counter, self.detection[8]] = 'Present'
         # move on to next species
         self.species_counter = self.species_counter + 1
         self.counter = 0
 
         if self.species_counter == len(self.species_list):
-            msg = QMessageBox()
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.setText('Audio Analysis completed! Quit and view your output file.')
-            msg.setWindowTitle('Complete!')
-            msg.exec_()
+            self.initialize_period()
         else:
             self.species_detections = self.selection_df_final[self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score', ascending=False)
 
@@ -183,21 +184,20 @@ class AudioAnalysis(QMainWindow):
     def badID_next_sound(self):
         self.counter = self.counter + 1
         if self.counter == self.species_detections.shape[0]:
+            self.output.loc[self.period_counter, self.detection[8]] = 'Failed Verification'
             self.species_counter = self.species_counter + 1
             self.counter = 0
-            self.species_detections = self.selection_df_final[
-                self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score',
-                                                                                                         ascending=False)
             if self.species_counter == len(self.species_list):
-                msg = QMessageBox()
-                msg.setStandardButtons(QMessageBox.Ok)
-                msg.setText('Audio Analysis completed! Quit and view your output file.')
-                msg.setWindowTitle('Complete!')
-                msg.exec_()
-            self.detection = self.species_detections.iloc[self.counter]
+                self.initialize_period()
+            else:
+                self.species_detections = self.selection_df_final[
+                    self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score',
+                                                                                                             ascending=False)
 
-            # Update species label
-            self.species_label.setText(self.detection[8])
+                self.detection = self.species_detections.iloc[self.counter]
+
+                # Update species label
+                self.species_label.setText(self.detection[8])
         else:
             self.detection = self.species_detections.iloc[self.counter]
 
@@ -245,47 +245,63 @@ class AudioAnalysis(QMainWindow):
         self.file_path = f
         self.time = t
 
-        selection_path = self.file_path / 'Selections'
-        data_path = self.file_path / 'Data'
+        self.selection_path = self.file_path / 'Selections'
+        self.data_path = self.file_path / 'Data'
 
         date_list = []
-        all_paths = list(data_path.glob('*'))
+        all_paths = list(self.data_path.glob('*'))
         all_files = [i.name for i in all_paths]
         names_only = [i.replace('.wav', '') for i in all_files]
         all_files_glob = [f'*{i}*' for i in names_only]
 
-        df = pd.DataFrame(names_only, columns=['PATH'])
+        self.df = pd.DataFrame(names_only, columns=['PATH'])
 
         for i in all_paths:
             date_list.append(datetime.strptime(i.as_posix().split(sep='_')[-2],'%Y%m%d'))
 
         if self.time == 'Day':
-            df['Date'] = date_list
-            self.output = df.drop_duplicates(subset='Date')
+            self.df['Date'] = date_list
+            self.output = self.df.drop_duplicates(subset='Date')
 
         if self.time == 'Week':
             week_list = []
             for x in date_list:
                 week_list.append(x.strftime('%U-%Y'))
-            df['Date'] = week_list
-            self.output = df.drop_duplicates(subset='Date')
+            self.df['Date'] = week_list
+            self.output = self.df.drop_duplicates(subset='Date')
 
         if self.time == 'Month':
             month_list = []
             for x in date_list:
                 month_list.append(x.strftime('%b-%Y'))
-            df['Date'] = month_list
-            self.output = df.drop_duplicates(subset='Date')
+            self.df['Date'] = month_list
+            self.output = self.df.drop_duplicates(subset='Date')
 
-        for period in self.output['Date']:
+        self.initialize_period()
+
+    def initialize_period(self):
+        # back up every period
+        self.output.to_csv(self.file_path / 'results.csv', index=False)
+
+        # tick counter
+        self.period_counter = self.period_counter + 1 # starts at 0
+        if self.period_counter == self.output.shape[0]: # check if last period completed
+            self.close()
+            msg = QMessageBox()
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.setText('Audio Analysis completed! Quit and view your output file.')
+            msg.setWindowTitle('Complete!')
+            msg.exec_()
+            # TODO make this close everything
+        else:
             selection_df_list = []
             self.audio_files = {}
 
             # Find the selection files
-            period_files = df[df['Date'] == period]
+            period_files = self.df[self.df['Date'] == self.output.loc[self.period_counter, 'Date']]
 
             for file in period_files['PATH']:
-                selection_df= pd.read_csv(list(selection_path.glob(f'*{file}*'))[0], delimiter='\t')
+                selection_df= pd.read_csv(list(self.selection_path.glob(f'*{file}*'))[0], delimiter='\t')
                 selection_df['File'] = file
                 selection_df_list.append(selection_df)
 
@@ -293,14 +309,20 @@ class AudioAnalysis(QMainWindow):
             self.selection_df_final = []
 
             for index, row in selection_df.iterrows():
-                if not row['Label'].islower():
+                if not row['Label'].islower(): # weird bug in Raven Pro where sometimes species names are abbreviated ex: baleag == Bald Eagle
                     self.selection_df_final.append(row)
             self.selection_df_final = pd.DataFrame(self.selection_df_final)
             self.species_list = self.selection_df_final['Label'].unique()
 
+            for spec in self.species_list:
+                if 'spec' in self.output.columns:
+                    continue
+                else: self.output[spec] = 'Not Detected'
+
             for file in period_files['PATH']:
-                wav_path = list(data_path.glob(f'*{file}*'))
+                wav_path = list(self.data_path.glob(f'*{file}*'))
                 self.audio_files[file] = librosa.load(wav_path[0])
+
             self.first_sound()
 
 if __name__ == '__main__':
