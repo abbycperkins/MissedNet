@@ -4,6 +4,7 @@ import sounddevice as sd
 import sys
 import matplotlib.pyplot as plt
 import numpy as np
+import webbrowser
 from PyQt5 import QtCore
 from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
@@ -73,23 +74,24 @@ class AudioAnalysis(QMainWindow):
         goodID = QPushButton('Good Identification')
         badID = QPushButton('Not Confirmed')
         repeat = QPushButton('Replay Clip')
+        open_web = QPushButton('Open Audio Examples')
 
         layout.addWidget(goodID)
         layout.addWidget(badID)
         layout.addWidget(repeat)
+        layout.addWidget(open_web)
 
         goodID.pressed.connect(lambda: self.goodID_next_sound())
         badID.pressed.connect(lambda: self.badID_next_sound())
         repeat.pressed.connect(lambda: self.play_sound_again())
-
-        # TODO add button to open webpage similar to https://www.allaboutbirds.org/guide/Golden-crowned_Kinglet/sounds
+        open_web.pressed.connect(lambda: self.open_website())
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
 
         self.output = None
-        self.file_path = None
+        self.file_path: Path | None = None # TODO add this to all plz
         self.time = None
         self.detection = None
         self.counter = 0
@@ -106,8 +108,15 @@ class AudioAnalysis(QMainWindow):
     def start(self) -> None:
         self.settings.show()
 
+    def open_website(self):
+        species = self.detection[8].replace("'", "").replace(" ", "_")
+        url = f'https://www.allaboutbirds.org/guide/{species}/sounds'
+        webbrowser.open(url)
+
     def first_sound(self):
-        self.species_detections = self.selection_df_final[self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score', ascending=False)
+        self.species_detections = self.selection_df_final[
+            self.selection_df_final['Label'] == self.species_list[self.species_counter]
+        ].sort_values(by='Score', ascending=False)
 
         self.detection = self.species_detections.iloc[self.counter]
 
@@ -121,11 +130,9 @@ class AudioAnalysis(QMainWindow):
 
         # Update QPixmap
 
-        hop_length = 1024
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(part, hop_length=hop_length)),
-                                    ref=np.max)
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(part)), ref=np.max)
         plt.figure(figsize=(4, 2))
-        librosa.display.specshow(D, y_axis='log', sr=sr, hop_length=hop_length, x_axis='time')
+        librosa.display.specshow(D, y_axis='linear', sr=sr, x_axis='time')
 
         plt.tight_layout()
         plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
@@ -149,7 +156,9 @@ class AudioAnalysis(QMainWindow):
         if self.species_counter == len(self.species_list):
             self.initialize_period()
         else:
-            self.species_detections = self.selection_df_final[self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score', ascending=False)
+            self.species_detections = self.selection_df_final[
+                self.selection_df_final['Label'] == self.species_list[self.species_counter]
+            ].sort_values(by='Score', ascending=False)
 
         self.detection = self.species_detections.iloc[self.counter]
 
@@ -163,14 +172,12 @@ class AudioAnalysis(QMainWindow):
 
         # Update QPixmap
 
-        hop_length = 1024
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(part, hop_length=hop_length)),
-                                    ref=np.max)
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(part)), ref=np.max)
         plt.figure(figsize=(4, 2))
-        librosa.display.specshow(D, y_axis='log', sr=sr, hop_length=hop_length, x_axis='time')
+        librosa.display.specshow(D, y_axis='linear', sr=sr, x_axis='time')
 
         plt.tight_layout()
-        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0)
+        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
         plt.close()
 
         pixmap = QPixmap("temp_image.png")
@@ -193,8 +200,8 @@ class AudioAnalysis(QMainWindow):
                 self.initialize_period()
             else:
                 self.species_detections = self.selection_df_final[
-                    self.selection_df_final['Label'] == self.species_list[self.species_counter]].sort_values(by='Score',
-                                                                                                             ascending=False)
+                    self.selection_df_final['Label'] == self.species_list[self.species_counter]
+                ].sort_values(by='Score', ascending=False)
 
                 self.detection = self.species_detections.iloc[self.counter]
 
@@ -210,14 +217,12 @@ class AudioAnalysis(QMainWindow):
 
         # Update QPixmap
 
-        hop_length = 1024
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(part, hop_length=hop_length)),
-                                    ref=np.max)
+        D = librosa.amplitude_to_db(np.abs(librosa.stft(part)), ref=np.max)
         plt.figure(figsize=(4, 2))
-        librosa.display.specshow(D, y_axis='log', sr=sr, hop_length=hop_length, x_axis='time')
+        librosa.display.specshow(D, y_axis='linear', sr=sr, x_axis='time')
 
         plt.tight_layout()
-        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0)
+        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
         plt.close()
 
         pixmap = QPixmap("temp_image.png")
