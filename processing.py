@@ -2,6 +2,8 @@ import pandas as pd
 import librosa
 import sounddevice as sd
 import sys
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import webbrowser
@@ -14,6 +16,16 @@ from PyQt5.QtWidgets import (
 from datetime import datetime
 from pathlib import Path
 
+
+class SoundThread(QtCore.QThread):
+    def __init__(self, y, sr):
+        super().__init__()
+        self.y = y
+        self.sr = sr
+    def run(self):
+        sd.wait()
+        sd.play(self.y, self.sr)
+        sd.wait()
 
 class Settings(QMainWindow):
     runAnalysis = QtCore.pyqtSignal(Path, str)
@@ -53,7 +65,6 @@ class Settings(QMainWindow):
 class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
-        plt.ioff()
         self.setWindowTitle("Audio Analysis")
         self.setFixedSize(600, 400)
         layout = QVBoxLayout()
@@ -71,20 +82,20 @@ class AudioAnalysis(QMainWindow):
         layout.addWidget(self.species_label)
         self.species_label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
 
-        goodID = QPushButton('Good Identification')
-        badID = QPushButton('Not Confirmed')
-        repeat = QPushButton('Replay Clip')
-        open_web = QPushButton('Open Audio Examples')
+        self.goodID = QPushButton('Good Identification')
+        self.badID = QPushButton('Not Confirmed')
+        self.repeat = QPushButton('Replay Clip')
+        self.open_web = QPushButton('Open Audio Examples')
 
-        layout.addWidget(goodID)
-        layout.addWidget(badID)
-        layout.addWidget(repeat)
-        layout.addWidget(open_web)
+        layout.addWidget(self.goodID)
+        layout.addWidget(self.badID)
+        layout.addWidget(self.repeat)
+        layout.addWidget(self.open_web)
 
-        goodID.pressed.connect(lambda: self.goodID_next_sound())
-        badID.pressed.connect(lambda: self.badID_next_sound())
-        repeat.pressed.connect(lambda: self.play_sound_again())
-        open_web.pressed.connect(lambda: self.open_website())
+        self.goodID.pressed.connect(lambda: self.goodID_next_sound())
+        self.badID.pressed.connect(lambda: self.badID_next_sound())
+        self.repeat.pressed.connect(lambda: self.play_sound())
+        self.open_web.pressed.connect(lambda: self.open_website())
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
@@ -114,6 +125,7 @@ class AudioAnalysis(QMainWindow):
         webbrowser.open(url)
 
     def first_sound(self):
+        self.disable_buttons()
         self.species_detections = self.selection_df_final[
             self.selection_df_final['Label'] == self.species_list[self.species_counter]
         ].sort_values(by='Score', ascending=False)
@@ -123,31 +135,10 @@ class AudioAnalysis(QMainWindow):
         # Update species label
         self.species_label.setText(self.detection[8])
 
-        start_time = self.detection[3]
-        end_time = self.detection[4]
-        y, sr = self.audio_files[self.detection[9]]
-        part = y[int(start_time * sr):int(end_time * sr)]
-
-        # Update QPixmap
-
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(part)), ref=np.max)
-        plt.figure(figsize=(4, 2))
-        librosa.display.specshow(D, y_axis='linear', sr=sr, x_axis='time')
-
-        plt.tight_layout()
-        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
-        plt.close()
-
-        pixmap = QPixmap("temp_image.png")
-        scaled_pixmap = pixmap.scaled(300, 200)
-        self.image_label.setPixmap(scaled_pixmap)
-
-        qApp.processEvents()
-        sd.wait()
-        sd.play(part, sr)
-        sd.wait()
+        self.play_sound()
 
     def goodID_next_sound(self):
+        self.disable_buttons()
         self.output.at[self.period_counter, self.detection[8]] = 'Confirmed Present'
         # move on to next species
         self.species_counter = self.species_counter + 1
@@ -165,37 +156,16 @@ class AudioAnalysis(QMainWindow):
         # Update species label
         self.species_label.setText(self.detection[8])
 
-        start_time = self.detection[3]
-        end_time = self.detection[4]
-        y, sr = self.audio_files[self.detection[9]]
-        part = y[int(start_time * sr):int(end_time * sr)]
-
-        # Update QPixmap
-
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(part)), ref=np.max)
-        plt.figure(figsize=(4, 2))
-        librosa.display.specshow(D, y_axis='linear', sr=sr, x_axis='time')
-
-        plt.tight_layout()
-        plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
-        plt.close()
-
-        pixmap = QPixmap("temp_image.png")
-        scaled_pixmap = pixmap.scaled(300, 200)
-        self.image_label.setPixmap(scaled_pixmap)
-        qApp.processEvents()
-
-        sd.wait()
-        sd.play(part, sr)
-        sd.wait()
-
+        self.play_sound()
 
     def badID_next_sound(self):
+        self.disable_buttons()
         self.counter = self.counter + 1
         if self.counter == self.species_detections.shape[0]:
             self.output.at[self.period_counter, self.detection[8]] = 'Failed Verification'
             self.species_counter = self.species_counter + 1
             self.counter = 0
+
             if self.species_counter == len(self.species_list):
                 self.initialize_period()
             else:
@@ -210,16 +180,12 @@ class AudioAnalysis(QMainWindow):
         else:
             self.detection = self.species_detections.iloc[self.counter]
 
-        start_time = self.detection[3]
-        end_time = self.detection[4]
-        y, sr = self.audio_files[self.detection[9]]
-        part = y[int(start_time * sr):int(end_time * sr)]
+        self.play_sound()
 
-        # Update QPixmap
-
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(part)), ref=np.max)
+    def plot_spec(self):
+        d = librosa.amplitude_to_db(np.abs(librosa.stft(self.part)), ref=np.max)
         plt.figure(figsize=(4, 2))
-        librosa.display.specshow(D, y_axis='linear', sr=sr, x_axis='time')
+        librosa.display.specshow(d, y_axis='linear', sr=self.sr, x_axis='time')
 
         plt.tight_layout()
         plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300)
@@ -230,20 +196,30 @@ class AudioAnalysis(QMainWindow):
         self.image_label.setPixmap(scaled_pixmap)
         qApp.processEvents()
 
-        sd.wait()
-        sd.play(part, sr)
-        sd.wait()
-
-    def play_sound_again(self):
+    def play_sound(self):
+        self.disable_buttons()
         start_time = self.detection[3]
         end_time = self.detection[4]
-        y, sr = self.audio_files[self.detection[9]]
-        part = y[int(start_time * sr):int(end_time * sr)]
-        qApp.processEvents()
+        y, self.sr = self.audio_files[self.detection[9]]
+        self.part = y[int(start_time * self.sr):int(end_time * self.sr)]
 
-        sd.wait()
-        sd.play(part, sr)
-        sd.wait()
+        self.plot_spec()
+
+        self.worker = SoundThread(self.part, self.sr)
+        self.worker.start()
+        self.worker.finished.connect(self.activate_buttons)
+
+    def activate_buttons(self):
+        self.goodID.setEnabled(True)
+        self.badID.setEnabled(True)
+        # self.open_web.setEnabled(True)
+        self.repeat.setEnabled(True)
+
+    def disable_buttons(self):
+        self.goodID.setEnabled(False)
+        self.badID.setEnabled(False)
+        # self.open_web.setEnabled(False)
+        self.repeat.setEnabled(False)
 
     @QtCore.pyqtSlot(Path, str)
     def run_analysis(self, f, t):
@@ -291,7 +267,7 @@ class AudioAnalysis(QMainWindow):
 
     def initialize_period(self):
         # back up every period
-        self.output.to_csv(self.file_path / 'results.csv', index=False)
+        self.output.drop(columns = 'PATH').to_csv(self.file_path / 'results.csv', index=False)
 
         # tick counter
         self.period_counter = self.period_counter + 1 # starts at 0
