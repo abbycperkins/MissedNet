@@ -17,7 +17,7 @@ from PyQt5.QtWidgets import (
 )
 from datetime import datetime
 from pathlib import Path
-# TODO figure out why the first sound plays twice each time period after the first??
+
 
 class Worker(QtCore.QObject):
     count_changed = QtCore.pyqtSignal(int)
@@ -87,6 +87,8 @@ class SoundThread(QtCore.QThread):
         super().__init__()
         self.y = y
         self.sr = sr
+        print(f'{self.y}:{self.sr}')
+
     def run(self):
         sd.wait()
         sd.play(self.y, self.sr)
@@ -161,8 +163,8 @@ class AudioAnalysis(QMainWindow):
         layout.addWidget(self.repeat, 2, 0, 1, 1)
         layout.addWidget(self.open_web, 2, 1, 1, 1)
 
-        self.goodID.pressed.connect(lambda: self.goodID_next_sound())
-        self.badID.pressed.connect(lambda: self.badID_next_sound())
+        self.goodID.pressed.connect(lambda: self.next_sound(True))
+        self.badID.pressed.connect(lambda: self.next_sound(False))
         self.repeat.pressed.connect(lambda: self.play_sound())
         self.open_web.pressed.connect(lambda: self.open_website())
 
@@ -209,13 +211,19 @@ class AudioAnalysis(QMainWindow):
 
         self.play_sound()
 
-    def goodID_next_sound(self):
+    def next_sound(self, good_id):
         self.disable_buttons()
-        self.output.at[self.period_counter, self.detection[8]] = 'Confirmed Present'
-        # move on to next species
-        self.species_counter = self.species_counter + 1
-        self.counter = 0
-
+        if good_id:
+            self.output.at[self.period_counter, self.detection[8]] = 'Confirmed Present'
+            # move on to next species
+            self.species_counter = self.species_counter + 1
+            self.counter = 0
+        if not good_id:
+            self.counter = self.counter + 1
+            if self.counter == self.species_detections.shape[0]:
+                self.output.at[self.period_counter, self.detection[8]] = 'Failed Verification'
+                self.species_counter = self.species_counter + 1
+                self.counter = 0
         if self.species_counter == len(self.species_list):
             self.initialize_period()
         else:
@@ -223,36 +231,12 @@ class AudioAnalysis(QMainWindow):
                 self.selection_df_final['Label'] == self.species_list[self.species_counter]
             ].sort_values(by='Score', ascending=False)
 
-        self.detection = self.species_detections.iloc[self.counter]
-
-        # Update species label
-        self.species_label.setText(self.detection[8])
-
-        self.play_sound()
-
-    def badID_next_sound(self):
-        self.disable_buttons()
-        self.counter = self.counter + 1
-        if self.counter == self.species_detections.shape[0]:
-            self.output.at[self.period_counter, self.detection[8]] = 'Failed Verification'
-            self.species_counter = self.species_counter + 1
-            self.counter = 0
-
-            if self.species_counter == len(self.species_list):
-                self.initialize_period()
-            else:
-                self.species_detections = self.selection_df_final[
-                    self.selection_df_final['Label'] == self.species_list[self.species_counter]
-                ].sort_values(by='Score', ascending=False)
-
-                self.detection = self.species_detections.iloc[self.counter]
-
-                # Update species label
-                self.species_label.setText(self.detection[8])
-        else:
             self.detection = self.species_detections.iloc[self.counter]
 
-        self.play_sound()
+            # Update species label
+            self.species_label.setText(self.detection[8])
+
+            self.play_sound()
 
     def plot_spec(self):
         d = librosa.amplitude_to_db(np.abs(librosa.stft(self.part, n_fft=512)), ref=np.max)
@@ -266,7 +250,7 @@ class AudioAnalysis(QMainWindow):
         pixmap = QPixmap("temp_image.png")
         scaled_pixmap = pixmap.scaled(500, 300, transformMode=Qt.SmoothTransformation)
         self.image_label.setPixmap(scaled_pixmap)
-        qApp.processEvents()
+        # qApp.processEvents()
 
     def play_sound(self):
         self.disable_buttons()
