@@ -10,84 +10,20 @@ import numpy as np
 import webbrowser
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtGui import QPixmap, QPainter
 from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox, qApp,
-    QGridLayout, QSizePolicy, QProgressBar
+    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider
 )
 from datetime import datetime
 from pathlib import Path
 
 
-class Worker(QtCore.QObject):
-    count_changed = QtCore.pyqtSignal(int)
-    loading_complete = QtCore.pyqtSignal(dict)
-
-    def __init__(self, files, path):
-        super().__init__()
-        self.files = files
-        self.path = path
-
-    def load_files(self):
-        total_files = len(self.files)
-        audio_files = {}
-        for index, file in enumerate(self.files):
-            wav_path = list(self.path.glob(f'*{file}*'))
-            audio_files[file] = librosa.load(wav_path[0])
-            progress = int((index + 1) / total_files * 100)
-            self.count_changed.emit(progress)
-        self.loading_complete.emit(audio_files)
-
-class PopUpProgressBar(QWidget): # TODO make main parent of this so the progress bar is in the right place
-    loading_complete = QtCore.pyqtSignal(dict)
-
-    def __init__(self, files, path):
-        super().__init__()
-        self.pbar = QProgressBar(self)
-        self.pbar.setGeometry(30, 40, 500, 75)
-
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(self.pbar)
-        self.setLayout(self.layout)
-
-        self.setGeometry(300, 300, 550, 100)
-        self.setWindowTitle('Loading Files')
-
-        # Thread and Worker setup
-        self.thread = QtCore.QThread()
-        self.worker = Worker(files, path)
-        self.worker.moveToThread(self.thread)
-
-        # Signal-slot connections
-        self.worker.count_changed.connect(self.on_count_changed)
-        self.worker.loading_complete.connect(self.loading_complete.emit)
-        self.worker.loading_complete.connect(self.on_loading_complete)
-        self.thread.started.connect(self.worker.load_files)
-
-        self.loop = None
-
-    def start_progress(self):
-        self.show()
-        self.thread.start()
-        self.loop = QtCore.QEventLoop()
-        self.loading_complete.connect(self.loop.quit)
-        self.loop.exec_() # needs to wait until all files are loaded, then continue with the program
-
-    @QtCore.pyqtSlot(int)
-    def on_count_changed(self, value):
-        self.pbar.setValue(value)
-
-    @QtCore.pyqtSlot(dict)
-    def on_loading_complete(self):
-        self.thread.quit()
-        self.thread.wait()
-
 class SoundThread(QtCore.QThread):
-    def __init__(self, y, sr):
+    def __init__(self, y, sr, vol):
         super().__init__()
-        self.y = y
+        self.y = y * vol * 6
         self.sr = sr
-        print(f'{self.y}:{self.sr}')
 
     def run(self):
         sd.wait()
@@ -132,20 +68,20 @@ class Settings(QMainWindow):
 class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Audio Analysis")
-        self.setFixedSize(600, 450)
+        self.setWindowTitle("Magpie Audio Analysis")
+        self.setFixedSize(600, 460)
         layout = QGridLayout()
 
         self.settings = Settings(self)
         self.settings.runAnalysis.connect(self.run_analysis)
 
         self.image_label = QLabel()
-        layout.addWidget(self.image_label, 0, 0, 1, 2, Qt.AlignHCenter)
+        layout.addWidget(self.image_label, 0, 0, 1, 3, Qt.AlignHCenter)
 
         self.species_label = QLabel("Species Name")
         self.species_label.setStyleSheet("font-size: 24px; font-weight: bold;")
 
-        layout.addWidget(self.species_label, 1, 0, 1, 2, Qt.AlignHCenter)
+        layout.addWidget(self.species_label, 1, 0, 1, 3, Qt.AlignHCenter)
 
         self.goodID = QPushButton('Good Identification')
         self.goodID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -168,6 +104,50 @@ class AudioAnalysis(QMainWindow):
         self.repeat.pressed.connect(lambda: self.play_sound())
         self.open_web.pressed.connect(lambda: self.open_website())
 
+        self.status = QStatusBar()
+        self.status.setSizeGripEnabled(False)
+
+        layout.addWidget(self.status, 4, 0, 1, 2)
+
+        self.progress = QProgressBar()
+
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: 2px solid grey;
+                border-radius: 5px;
+                background-color: #f0f0f0;
+                text-align: center;
+            }
+            QProgressBar::chunk {
+                background-color: #5589aa;
+                width: 10px;
+            }
+        """)
+
+        self.message = QLabel('')
+        self.message.setStyleSheet("font-size: 12px;")
+        self.status.addPermanentWidget(self.progress, stretch = 1)
+        self.status.addWidget(self.message)
+
+        vol_layout = QVBoxLayout()
+
+        self.volume = QSlider()
+        self.volume.setValue(20)
+        self.volume.setFixedWidth(30)
+
+        vol_label = QLabel()
+        pixmap=QPixmap("volume.png")
+        scaled_pixmap = pixmap.scaled(int(284/6), int(162/6), transformMode=Qt.SmoothTransformation)
+        vol_label.setPixmap(scaled_pixmap)
+        vol_layout.addWidget(vol_label)
+        vol_layout.addWidget(self.volume, alignment = Qt.AlignHCenter)
+
+        layout.addLayout(vol_layout, 2, 2, 3, 1)
+
+        layout.setColumnStretch(0, 6)
+        layout.setColumnStretch(1, 6)
+        layout.setColumnStretch(2, 1)
+
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
@@ -175,7 +155,7 @@ class AudioAnalysis(QMainWindow):
         self.output: DataFrame | None = None
         self.file_path: Path | None = None
         self.time: str | None = None
-        self.detection: list | None = None
+        self.detection: DataFrame | None = None
         self.counter = 0
         self.species_counter = 0
         self.period_counter = -1
@@ -193,13 +173,15 @@ class AudioAnalysis(QMainWindow):
         self.settings.show()
 
     def open_website(self):
-        species = self.detection[8].replace("'", "").replace(" ", "_")
+        species = self.detection['Label'].replace("'", "").replace(" ", "_")
         url = f'https://www.allaboutbirds.org/guide/{species}/sounds'
         webbrowser.open(url)
 
     def first_sound(self):
         self.disable_buttons()
         self.species_counter = 0
+        self.message.setText('Species Progress for Period:')
+        self.progress.setValue(self.species_counter)
         self.species_detections = self.selection_df_final[
             self.selection_df_final['Label'] == self.species_list[self.species_counter]
         ].sort_values(by='Score', ascending=False)
@@ -207,24 +189,30 @@ class AudioAnalysis(QMainWindow):
         self.detection = self.species_detections.iloc[self.counter]
 
         # Update species label
-        self.species_label.setText(self.detection[8])
+        self.species_label.setText(self.detection['Label'])
 
         self.play_sound()
 
     def next_sound(self, good_id):
         self.disable_buttons()
+        self.volume.setValue(20)
         if good_id:
-            self.output.at[self.period_counter, self.detection[8]] = 'Confirmed Present'
+            self.output.at[self.period_counter, self.detection['Label']] = 'Confirmed Present'
             # move on to next species
             self.species_counter = self.species_counter + 1
+            progress = int(self.species_counter / len(self.species_list) * 100)
+            self.progress.setValue(progress)
             self.counter = 0
         if not good_id:
             self.counter = self.counter + 1
             if self.counter == self.species_detections.shape[0]:
-                self.output.at[self.period_counter, self.detection[8]] = 'Failed Verification'
+                self.output.at[self.period_counter, self.detection['Label']] = 'Failed Verification'
                 self.species_counter = self.species_counter + 1
+                progress = int(self.species_counter / len(self.species_list) * 100)
+                self.progress.setValue(progress)
                 self.counter = 0
         if self.species_counter == len(self.species_list):
+            self.output.at[self.period_counter, 'Complete'] = 'Yes'
             self.initialize_period()
         else:
             self.species_detections = self.selection_df_final[
@@ -234,7 +222,7 @@ class AudioAnalysis(QMainWindow):
             self.detection = self.species_detections.iloc[self.counter]
 
             # Update species label
-            self.species_label.setText(self.detection[8])
+            self.species_label.setText(self.detection['Label'])
 
             self.play_sound()
 
@@ -254,27 +242,27 @@ class AudioAnalysis(QMainWindow):
 
     def play_sound(self):
         self.disable_buttons()
-        start_time = self.detection[3]
-        end_time = self.detection[4]
-        y, self.sr = self.audio_files[self.detection[9]]
+        start_time = self.detection['Begin Time (s)']
+        end_time = self.detection['End Time (s)']
+        y, self.sr = self.audio_files[self.detection['File']]
         self.part = y[int(start_time * self.sr):int(end_time * self.sr)]
 
         self.plot_spec()
 
-        self.worker = SoundThread(self.part, self.sr)
+        v = self.volume.value()/50
+
+        self.worker = SoundThread(self.part, self.sr, v)
         self.worker.start()
         self.worker.finished.connect(self.activate_buttons)
 
     def activate_buttons(self):
         self.goodID.setEnabled(True)
         self.badID.setEnabled(True)
-        # self.open_web.setEnabled(True)
         self.repeat.setEnabled(True)
 
     def disable_buttons(self):
         self.goodID.setEnabled(False)
         self.badID.setEnabled(False)
-        # self.open_web.setEnabled(False)
         self.repeat.setEnabled(False)
 
     @QtCore.pyqtSlot(Path, str)
@@ -319,15 +307,19 @@ class AudioAnalysis(QMainWindow):
             self.output = self.df.drop_duplicates(subset='Date')
             self.output = self.output.reset_index(drop=True)
 
+        self.output['Complete'] = 'No'
+        self.output = self.output.drop(columns='PATH')
         self.initialize_period()
 
     def initialize_period(self):
-        # back up every period
-        self.output.drop(columns = 'PATH').to_csv(self.file_path / 'results.csv', index=False)
-
-        # tick counter
+        if self.period_counter == -1:
+            if Path(self.file_path / 'results.csv').is_file():
+                self.output = pd.read_csv(self.file_path / 'results.csv')
+                self.period_counter = self.output.index[self.output['Complete'] == 'No'][0] - 1
+                # tick counter
         self.period_counter = self.period_counter + 1 # starts at 0
-        if self.period_counter == self.output.shape[0]: # check if last period completed
+        self.output.to_csv(self.file_path / 'results.csv', index=False)
+        if self.period_counter == self.output.shape[0]: # check if final period completed
             self.close()
             msg = QMessageBox()
             msg.setStandardButtons(QMessageBox.Ok)
@@ -340,12 +332,12 @@ class AudioAnalysis(QMainWindow):
 
             # Find the selection files
             period_files = self.df[self.df['Date'] == self.output.iloc[self.period_counter]['Date']]
+            selection_df = DataFrame()
             for file in period_files['PATH']:
                 selection_df= pd.read_csv(list(self.selection_path.glob(f'*{file}*'))[0], delimiter='\t')
                 selection_df['File'] = file
                 selection_df_list.append(selection_df)
-
-            selection_df = pd.concat(selection_df_list, ignore_index=True)
+                selection_df = pd.concat(selection_df_list, ignore_index=True)
             self.selection_df_final = []
             if 'Label' in selection_df.columns:
                 for index, row in selection_df.iterrows():
@@ -359,16 +351,20 @@ class AudioAnalysis(QMainWindow):
                         continue
                     else: self.output[spec] = ''
 
-                popup = PopUpProgressBar(period_files['PATH'], self.data_path)
-                popup.loading_complete.connect(self.receive_dict)
-                popup.start_progress()
+                total_files = len(period_files['PATH'])
+                self.audio_files = {}
+                self.message.setText('Loading Audio Files...')
+                for index, file in enumerate(period_files['PATH']):
+                    wav_path = list(self.data_path.glob(f'*{file}*'))
+                    self.audio_files[file] = librosa.load(wav_path[0])
+                    progress = int((index + 1) / total_files * 100)
+                    self.progress.setValue(progress)
                 self.first_sound()
             else:
+                self.output.at[self.period_counter, 'Complete'] = 'Yes'
+                self.output.drop(columns='PATH').to_csv(self.file_path / 'results.csv', index=False)
                 self.initialize_period()
 
-    @QtCore.pyqtSlot(dict)
-    def receive_dict(self, d):
-        self.audio_files = d
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
