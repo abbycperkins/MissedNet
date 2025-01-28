@@ -10,7 +10,7 @@ import numpy as np
 import webbrowser
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QPainter
+from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox, qApp,
     QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider
@@ -69,7 +69,7 @@ class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Magpie Audio Analysis")
-        self.setFixedSize(600, 460)
+        self.setFixedSize(600, 500)
         layout = QGridLayout()
 
         self.settings = Settings(self)
@@ -77,6 +77,9 @@ class AudioAnalysis(QMainWindow):
 
         self.image_label = QLabel()
         layout.addWidget(self.image_label, 0, 0, 1, 3, Qt.AlignHCenter)
+        pixmap = QPixmap("volume.png")
+        scaled_pixmap = pixmap.scaled(500, 300, transformMode=Qt.SmoothTransformation)
+        self.image_label.setPixmap(scaled_pixmap)
 
         self.species_label = QLabel("Species Name")
         self.species_label.setStyleSheet("font-size: 24px; font-weight: bold;")
@@ -124,7 +127,7 @@ class AudioAnalysis(QMainWindow):
             }
         """)
 
-        self.message = QLabel('')
+        self.message = QLabel('Loading Audio Files...')
         self.message.setStyleSheet("font-size: 12px;")
         self.status.addPermanentWidget(self.progress, stretch = 1)
         self.status.addWidget(self.message)
@@ -316,7 +319,7 @@ class AudioAnalysis(QMainWindow):
             if Path(self.file_path / 'results.csv').is_file():
                 self.output = pd.read_csv(self.file_path / 'results.csv')
                 self.period_counter = self.output.index[self.output['Complete'] == 'No'][0] - 1
-                # tick counter
+        # tick counter
         self.period_counter = self.period_counter + 1 # starts at 0
         self.output.to_csv(self.file_path / 'results.csv', index=False)
         if self.period_counter == self.output.shape[0]: # check if final period completed
