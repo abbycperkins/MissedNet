@@ -342,6 +342,13 @@ class AudioAnalysis(QMainWindow):
                 selection_df_list.append(selection_df)
                 selection_df = pd.concat(selection_df_list, ignore_index=True)
             self.selection_df_final = []
+
+            if 'Confidence' in selection_df.columns:
+                selection_df.rename(columns={'Confidence':'Score'}, inplace=True)
+
+            if 'Common Name' in selection_df.columns:
+                selection_df.rename(columns={'Common Name':'Label'}, inplace=True)
+
             if 'Label' in selection_df.columns:
                 for index, row in selection_df.iterrows():
                     if not row['Label'].islower(): # weird bug in Raven Pro where sometimes species names are abbreviated ex: baleag == Bald Eagle
@@ -363,6 +370,7 @@ class AudioAnalysis(QMainWindow):
                     progress = int((index + 1) / total_files * 100)
                     self.progress.setValue(progress)
                 self.first_sound()
+
             else:
                 self.output.at[self.period_counter, 'Complete'] = 'Yes'
                 self.output.drop(columns='PATH').to_csv(self.file_path / 'results.csv', index=False)
