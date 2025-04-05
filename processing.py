@@ -68,7 +68,7 @@ class Settings(QMainWindow):
 class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Magpie Audio Analysis")
+        self.setWindowTitle("MissedNET: Audio Analysis")
         self.setFixedSize(600, 500)
         layout = QGridLayout()
 
@@ -84,7 +84,11 @@ class AudioAnalysis(QMainWindow):
         self.species_label = QLabel("Species Name")
         self.species_label.setStyleSheet("font-size: 24px; font-weight: bold;")
 
+        self.info_label = QLabel("Score 0.### | Detection #/#")
+        self.info_label.setStyleSheet("font-size: 16px; font-weight: bold;")
+
         layout.addWidget(self.species_label, 1, 0, 1, 3, Qt.AlignHCenter)
+        layout.addWidget(self.info_label, 2, 0, 1, 3, Qt.AlignHCenter)
 
         self.goodID = QPushButton('Good Identification')
         self.goodID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -97,10 +101,10 @@ class AudioAnalysis(QMainWindow):
         self.open_web = QPushButton('Open Audio Examples')
         self.open_web.setStyleSheet('font-size: 14px')
 
-        layout.addWidget(self.goodID, 3, 0, 1, 1)
-        layout.addWidget(self.badID, 3, 1, 1, 1)
-        layout.addWidget(self.repeat, 2, 0, 1, 1)
-        layout.addWidget(self.open_web, 2, 1, 1, 1)
+        layout.addWidget(self.goodID, 4, 0, 1, 1)
+        layout.addWidget(self.badID, 4, 1, 1, 1)
+        layout.addWidget(self.repeat, 3, 0, 1, 1)
+        layout.addWidget(self.open_web, 3, 1, 1, 1)
 
         self.goodID.pressed.connect(lambda: self.next_sound(True))
         self.badID.pressed.connect(lambda: self.next_sound(False))
@@ -110,7 +114,7 @@ class AudioAnalysis(QMainWindow):
         self.status = QStatusBar()
         self.status.setSizeGripEnabled(False)
 
-        layout.addWidget(self.status, 4, 0, 1, 2)
+        layout.addWidget(self.status, 5, 0, 1, 2)
 
         self.progress = QProgressBar()
 
@@ -192,7 +196,11 @@ class AudioAnalysis(QMainWindow):
         self.detection = self.species_detections.iloc[self.counter]
 
         # Update species label
-        self.species_label.setText(self.detection['Label'])
+        species_text = f"{self.detection['Label']}"
+        self.species_label.setText(species_text)
+
+        info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
+        self.info_label.setText(info_text)
 
         self.play_sound()
 
@@ -225,7 +233,11 @@ class AudioAnalysis(QMainWindow):
             self.detection = self.species_detections.iloc[self.counter]
 
             # Update species label
-            self.species_label.setText(self.detection['Label'])
+            species_text = f"{self.detection['Label']}"
+            self.species_label.setText(species_text)
+
+            info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
+            self.info_label.setText(info_text)
 
             self.play_sound()
 
