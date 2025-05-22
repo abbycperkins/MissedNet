@@ -13,7 +13,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox, qApp,
-    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider
+    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider, QDockWidget, QRadioButton, QButtonGroup, QAction
 )
 from datetime import datetime
 from pathlib import Path
@@ -116,6 +116,51 @@ class AudioAnalysis(QMainWindow):
 
         layout.addWidget(self.status, 5, 0, 1, 2)
 
+        self.dock = QDockWidget('Advanced Options')
+        self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+
+        self.dock_content = QWidget()
+        self.dock_layout = QVBoxLayout(self.dock_content)
+        self.dock.setWidget(self.dock_content)
+
+        self.dock.setFloating(True)
+        self.dock.setGeometry(self.geometry().right() + 10, self.geometry().top(), 200, 150)
+
+        self.dock.hide()
+
+        self.toggle_dock_action = QAction("Show Advanced Options", self)
+        self.toggle_dock_action.setCheckable(True)
+        self.toggle_dock_action.triggered.connect(self.toggle_dock)
+        self.dock.visibilityChanged.connect(self.update_toggle_button)
+        self.menuBar().addAction(self.toggle_dock_action)
+
+        self.dock_buttons = QButtonGroup()
+
+        self.default = QRadioButton('Default: check every period')
+        self.default.setChecked(True)
+
+        self.black = QRadioButton('Blacklist: assume never present')
+
+        self.gray = QRadioButton('Graylist: reduce to weekly checks')
+
+        self.white = QRadioButton('Whitelist: assume always present')
+
+        self.default.setObjectName("default")
+        self.black.setObjectName("blacklist")
+        self.gray.setObjectName("graylist")
+        self.white.setObjectName("whitelist")
+
+        self.dock_buttons.addButton(self.default)
+        self.dock_buttons.addButton(self.white)
+        self.dock_buttons.addButton(self.gray)
+        self.dock_buttons.addButton(self.black)
+
+        # Add individual buttons to the layout
+        self.dock_layout.addWidget(self.default)
+        self.dock_layout.addWidget(self.black)
+        self.dock_layout.addWidget(self.gray)
+        self.dock_layout.addWidget(self.white)
+
         self.progress = QProgressBar()
 
         self.progress.setStyleSheet("""
@@ -175,9 +220,40 @@ class AudioAnalysis(QMainWindow):
         self.selection_path: Path | None = None
         self.sr: int | None = None
         self.part: np.ndarray | None = None
+        self.behavior = {}
+
 
     def start(self) -> None:
         self.settings.show()
+
+    def position_dock(self):
+        main_geom = self.geometry()
+        dock_width = 200
+        dock_height = 150
+
+        self.dock.setGeometry(
+            main_geom.right() + 10,
+            main_geom.top(),
+            dock_width,
+            dock_height
+        )
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        if self.dock.isFloating():
+            self.position_dock()
+
+    def toggle_dock(self):
+        if self.dock.isVisible():
+            self.dock.hide()
+        else:
+            self.dock.show()
+
+    def update_toggle_button(self, visible):
+        if visible:
+            self.toggle_dock_action.setText("Hide Advanced Options")
+        else:
+            self.toggle_dock_action.setText("Show Advanced Options")
 
     def open_website(self):
         species = self.detection['Label'].replace("'", "").replace(" ", "_")
@@ -207,6 +283,8 @@ class AudioAnalysis(QMainWindow):
     def next_sound(self, good_id):
         self.disable_buttons()
         self.volume.setValue(20)
+        checked_button = self.dock_buttons.checkedButton()
+        self.behavior[self.detection['Label']] = checked_button.objectName()
         if good_id:
             self.output.at[self.period_counter, self.detection['Label']] = 'Confirmed Present'
             # move on to next species
@@ -257,6 +335,19 @@ class AudioAnalysis(QMainWindow):
 
     def play_sound(self):
         self.disable_buttons()
+
+        # Update behavior button
+        chosen = self.behavior.get(self.detection['Label'])
+        print(chosen)
+        if chosen == 'blacklist':
+            self.black.setChecked(True)
+        elif chosen == 'whitelist':
+            self.white.setChecked(True)
+        elif chosen == 'graylist':
+            self.gray.setChecked(True)
+        else:
+            self.default.setChecked(True)
+
         start_time = self.detection['Begin Time (s)']
         end_time = self.detection['End Time (s)']
         y, self.sr = self.audio_files[self.detection['File']]
@@ -331,9 +422,23 @@ class AudioAnalysis(QMainWindow):
             if Path(self.file_path / 'results.csv').is_file():
                 self.output = pd.read_csv(self.file_path / 'results.csv')
                 self.period_counter = self.output.index[self.output['Complete'] == 'No'][0] - 1
+
+            if Path(self.file_path / 'behavior_dict.csv').is_file():
+                behavior_df = pd.read_csv(self.file_path / 'behavior_dict.csv', index_col=0)
+                behavior = behavior_df.to_dict("split")
+                self.behavior = dict(zip(behavior["index"], [row[0] for row in behavior["data"]]))
+                print(self.behavior)
+
         # tick counter
         self.period_counter = self.period_counter + 1 # starts at 0
+
+        # save output every period
         self.output.to_csv(self.file_path / 'results.csv', index=False)
+
+        behavior_df = pd.DataFrame.from_dict(self.behavior, orient="index")
+        behavior_df.reset_index(inplace=True)
+        behavior_df.to_csv(self.file_path / 'behavior_dict.csv', index = False)
+
         if self.period_counter == self.output.shape[0]: # check if final period completed
             self.close()
             msg = QMessageBox()
@@ -354,6 +459,8 @@ class AudioAnalysis(QMainWindow):
                 selection_df_list.append(selection_df)
                 selection_df = pd.concat(selection_df_list, ignore_index=True)
             self.selection_df_final = []
+
+            print(selection_df)
 
             if 'Confidence' in selection_df.columns:
                 selection_df.rename(columns={'Confidence':'Score'}, inplace=True)
