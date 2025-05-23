@@ -1,22 +1,25 @@
 import pandas as pd
 import librosa
 import sounddevice as sd
+import soundfile as sf
 import sys
 import matplotlib
-from pandas import DataFrame
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
 import webbrowser
+import re
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QImage
 from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox, qApp,
-    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider, QDockWidget, QRadioButton, QButtonGroup, QAction
+    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider, QDockWidget, QRadioButton, QButtonGroup, QAction,
+    QHBoxLayout
 )
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
+from pandas import DataFrame
 
 
 class SoundThread(QtCore.QThread):
@@ -69,26 +72,62 @@ class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MissedNET: Audio Analysis")
-        self.setFixedSize(600, 500)
+        self.setFixedSize(600, 550)
         layout = QGridLayout()
 
         self.settings = Settings(self)
         self.settings.runAnalysis.connect(self.run_analysis)
 
         self.image_label = QLabel()
-        layout.addWidget(self.image_label, 0, 0, 1, 3, Qt.AlignHCenter)
+        layout.addWidget(self.image_label, 0, 0, 1, 7, Qt.AlignHCenter)
         pixmap = QPixmap("volume.png")
         scaled_pixmap = pixmap.scaled(500, 300, transformMode=Qt.SmoothTransformation)
         self.image_label.setPixmap(scaled_pixmap)
 
+        arrow_style = """
+            font-size: 36px;               /* Make triangle larger */
+            font-weight: bold;
+            min-width: 30px;               /* Make button wider */
+            min-height: 30px;              /* Make button taller */
+            padding: 10px;
+        """
+
+        # Create arrow buttons
+        self.left_arrow = QPushButton("◀")
+        self.left_arrow.setFixedWidth(40)
+        self.left_arrow.setStyleSheet(arrow_style)
+        self.right_arrow = QPushButton("▶")
+        self.right_arrow.setFixedWidth(40)
+        self.right_arrow.setStyleSheet(arrow_style)
+        # Link to functions
+        self.left_arrow.clicked.connect(lambda: self.next_sound(new_species=False, forward=False))
+        self.right_arrow.clicked.connect(lambda: self.next_sound(new_species=False, forward=True))
+
+        self.export_clip = QPushButton("Export Clip")
+        self.export_clip.setStyleSheet('font-size: 14px')
+        layout.addWidget(self.export_clip, 3, 0, 1, 2)
+        self.export_clip.clicked.connect(self.export_current_clip)
+
+        # Create the species label
         self.species_label = QLabel("Species Name")
         self.species_label.setStyleSheet("font-size: 24px; font-weight: bold;")
+        self.species_label.setAlignment(Qt.AlignCenter)
+
+        # Combine into horizontal layout
+        species_layout = QHBoxLayout()
+        species_layout.addWidget(self.left_arrow)
+        species_layout.addWidget(self.species_label, stretch=1)
+        species_layout.addWidget(self.right_arrow)
+
+        # Add the layout to the grid
+        species_widget = QWidget()
+        species_widget.setLayout(species_layout)
+        layout.addWidget(species_widget, 1, 0, 1, 6)
 
         self.info_label = QLabel("Score 0.### | Detection #/#")
         self.info_label.setStyleSheet("font-size: 16px; font-weight: bold;")
 
-        layout.addWidget(self.species_label, 1, 0, 1, 3, Qt.AlignHCenter)
-        layout.addWidget(self.info_label, 2, 0, 1, 3, Qt.AlignHCenter)
+        layout.addWidget(self.info_label, 2, 0, 1, 6, Qt.AlignHCenter)
 
         self.goodID = QPushButton('Good Identification')
         self.goodID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
@@ -101,20 +140,20 @@ class AudioAnalysis(QMainWindow):
         self.open_web = QPushButton('Open Audio Examples')
         self.open_web.setStyleSheet('font-size: 14px')
 
-        layout.addWidget(self.goodID, 4, 0, 1, 1)
-        layout.addWidget(self.badID, 4, 1, 1, 1)
-        layout.addWidget(self.repeat, 3, 0, 1, 1)
-        layout.addWidget(self.open_web, 3, 1, 1, 1)
+        layout.addWidget(self.goodID, 4, 0, 1, 3)
+        layout.addWidget(self.badID, 4, 3, 1, 3)
+        layout.addWidget(self.repeat, 3, 2, 1, 2)
+        layout.addWidget(self.open_web, 3, 4, 1, 2)
 
-        self.goodID.pressed.connect(lambda: self.next_sound(True))
-        self.badID.pressed.connect(lambda: self.next_sound(False))
+        self.goodID.pressed.connect(lambda: self.detection_decision(good_id=True))
+        self.badID.pressed.connect(lambda: self.detection_decision(good_id=False))
         self.repeat.pressed.connect(lambda: self.play_sound())
         self.open_web.pressed.connect(lambda: self.open_website())
 
         self.status = QStatusBar()
         self.status.setSizeGripEnabled(False)
 
-        layout.addWidget(self.status, 5, 0, 1, 2)
+        layout.addWidget(self.status, 5, 0, 1, 7)
 
         self.dock = QDockWidget('Advanced Options')
         self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
@@ -184,6 +223,7 @@ class AudioAnalysis(QMainWindow):
         vol_layout = QVBoxLayout()
 
         self.volume = QSlider()
+        self.volume.setFocusPolicy(Qt.NoFocus)
         self.volume.setValue(20)
         self.volume.setFixedWidth(30)
 
@@ -194,11 +234,11 @@ class AudioAnalysis(QMainWindow):
         vol_layout.addWidget(vol_label)
         vol_layout.addWidget(self.volume, alignment = Qt.AlignHCenter)
 
-        layout.addLayout(vol_layout, 2, 2, 3, 1)
+        layout.addLayout(vol_layout, 1, 6, 4, 1)
 
-        layout.setColumnStretch(0, 6)
-        layout.setColumnStretch(1, 6)
-        layout.setColumnStretch(2, 1)
+        for i in range(6):
+            layout.setColumnStretch(i, 6)
+        layout.setColumnStretch(6, 1)
 
         central_widget = QWidget()
         central_widget.setLayout(layout)
@@ -220,11 +260,25 @@ class AudioAnalysis(QMainWindow):
         self.selection_path: Path | None = None
         self.sr: int | None = None
         self.part: np.ndarray | None = None
-        self.behavior = {}
+        self.behavior: dict[str, str] = {}
 
 
     def start(self) -> None:
         self.settings.show()
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocus()
+
+    def keyPressEvent(self, event):
+        key = event.key()
+
+        if key == Qt.Key_Left and self.left_arrow.isEnabled():
+            self.left_arrow.click()
+        elif key == Qt.Key_Right and self.right_arrow.isEnabled():
+            self.right_arrow.click()
+        elif key in (Qt.Key_Enter, Qt.Key_Return) and self.goodID.isEnabled():
+            self.goodID.click()
+        elif key == Qt.Key_Backspace and self.badID.isEnabled():
+            self.badID.click()
 
     def position_dock(self):
         main_geom = self.geometry()
@@ -260,46 +314,52 @@ class AudioAnalysis(QMainWindow):
         url = f'https://www.allaboutbirds.org/guide/{species}/sounds'
         webbrowser.open(url)
 
-    def first_sound(self):
-        self.disable_buttons()
-        self.species_counter = 0
-        self.message.setText('Species Progress for Period:')
-        self.progress.setValue(self.species_counter)
-        self.species_detections = self.selection_df_final[
-            self.selection_df_final['Label'] == self.species_list[self.species_counter]
-        ].sort_values(by='Score', ascending=False)
+    def arrow_activation(self):
+        # Disable left arrow if at first detection
+        self.left_arrow.setEnabled(self.counter > 0)
+        # Disable right arrow if at last detection
+        self.right_arrow.setEnabled(self.counter < len(self.species_detections) - 1)
 
-        self.detection = self.species_detections.iloc[self.counter]
+    def check_behavior_criteria(self):
+        label = self.detection['Label']
+        behavior = self.behavior.get(label)
 
-        # Update species label
-        species_text = f"{self.detection['Label']}"
-        self.species_label.setText(species_text)
+        if behavior is None:
+            return  # No behavior set — skip logic
 
-        info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
-        self.info_label.setText(info_text)
+        if behavior == 'blacklist':
+            self.output.at[self.period_counter, label] = 'Failed Verification'
+            self.increment_species()
 
-        self.play_sound()
+        elif behavior == 'whitelist':
+            self.output.at[self.period_counter, label] = 'Confirmed Present'
+            self.increment_species()
 
-    def next_sound(self, good_id):
-        self.disable_buttons()
-        self.volume.setValue(20)
-        checked_button = self.dock_buttons.checkedButton()
-        self.behavior[self.detection['Label']] = checked_button.objectName()
-        if good_id:
-            self.output.at[self.period_counter, self.detection['Label']] = 'Confirmed Present'
-            # move on to next species
-            self.species_counter = self.species_counter + 1
-            progress = int(self.species_counter / len(self.species_list) * 100)
-            self.progress.setValue(progress)
-            self.counter = 0
-        if not good_id:
-            self.counter = self.counter + 1
-            if self.counter == self.species_detections.shape[0]:
-                self.output.at[self.period_counter, self.detection['Label']] = 'Failed Verification'
-                self.species_counter = self.species_counter + 1
-                progress = int(self.species_counter / len(self.species_list) * 100)
-                self.progress.setValue(progress)
-                self.counter = 0
+        elif behavior == 'graylist':
+            # Ensure 'Date' is datetime
+            if not pd.api.types.is_datetime64_any_dtype(self.output['Date']):
+                self.output['Date'] = pd.to_datetime(self.output['Date'], errors='coerce')
+
+            confirmed = self.output[self.output[label] == 'Confirmed Present']
+            if confirmed.empty:
+                return  # No previous confirmations, fall through
+
+            last_date = confirmed['Date'].max()
+            current_date = self.output.iloc[self.period_counter]['Date']
+
+            # If dates are valid, check interval
+            if pd.notnull(last_date) and pd.notnull(current_date):
+                delta = (current_date - last_date).days
+                if delta < 7:
+                    self.output.at[self.period_counter, label] = 'Confirmed Present'
+                    self.increment_species()
+
+    def increment_species(self):
+        self.species_counter = self.species_counter + 1
+        progress = int(self.species_counter / len(self.species_list) * 100)
+        self.progress.setValue(progress)
+        self.counter = 0
+
         if self.species_counter == len(self.species_list):
             self.output.at[self.period_counter, 'Complete'] = 'Yes'
             self.initialize_period()
@@ -310,14 +370,40 @@ class AudioAnalysis(QMainWindow):
 
             self.detection = self.species_detections.iloc[self.counter]
 
-            # Update species label
-            species_text = f"{self.detection['Label']}"
-            self.species_label.setText(species_text)
+        self.check_behavior_criteria()
+        species_text = f"{self.detection['Label']}"
+        self.species_label.setText(species_text)
 
-            info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
-            self.info_label.setText(info_text)
+    def next_sound(self, new_species: bool, forward: bool = True, first_sound: bool = False) -> None:
+        if first_sound:
+            self.species_counter = -1
+            self.increment_species()
+            self.message.setText('Species Progress for Period:')
 
-            self.play_sound()
+        self.disable_buttons()
+        self.volume.setValue(20)
+        checked_button = self.dock_buttons.checkedButton()
+        self.behavior[self.detection['Label']] = checked_button.objectName()
+
+        if not new_species:
+            index_adjustment = 1 if forward else -1
+            self.counter = self.counter + index_adjustment
+
+        #Get specific detection
+        self.detection = self.species_detections.iloc[self.counter]
+
+        # Update info label
+        info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
+        self.info_label.setText(info_text)
+        self.play_sound()
+
+    def detection_decision(self, good_id: bool):
+        if good_id:
+            self.output.at[self.period_counter, self.detection['Label']] = 'Confirmed Present'
+        else:
+            self.output.at[self.period_counter, self.detection['Label']] = 'Failed Verification'
+        self.increment_species()
+        self.next_sound(new_species=True)
 
     def plot_spec(self):
         d = librosa.amplitude_to_db(np.abs(librosa.stft(self.part, n_fft=512)), ref=np.max)
@@ -338,7 +424,6 @@ class AudioAnalysis(QMainWindow):
 
         # Update behavior button
         chosen = self.behavior.get(self.detection['Label'])
-        print(chosen)
         if chosen == 'blacklist':
             self.black.setChecked(True)
         elif chosen == 'whitelist':
@@ -360,6 +445,42 @@ class AudioAnalysis(QMainWindow):
         self.worker = SoundThread(self.part, self.sr, v)
         self.worker.start()
         self.worker.finished.connect(self.activate_buttons)
+        self.worker.finished.connect(self.arrow_activation)
+
+    def export_current_clip(self):
+        if self.part is None or self.detection is None:
+            QMessageBox.warning(self, "Export Error", "No clip is loaded to export.")
+            return
+
+        species = self.detection['Label'].replace(" ", "_").replace("'", "")
+        begin_seconds = self.detection['Begin Time (s)']
+
+        # Get base recording time from the filename
+        # Assumes format like: ID_20240612_054213.wav
+        raw_filename = self.detection['File']
+        date_time_match = re.search(r'(\d{8})_(\d{6})', raw_filename)
+
+        if date_time_match:
+            date_str = date_time_match.group(1)  # '20240612'
+            time_str = date_time_match.group(2)  # '054213'
+            dt = datetime.strptime(date_str + time_str, '%Y%m%d%H%M%S')
+            obs_time = dt + timedelta(seconds=begin_seconds)
+        else:
+            QMessageBox.warning(self, "Export Error", "Could not parse datetime from filename.")
+            return
+
+        timestamp = obs_time.strftime("%Y-%m-%d_%H-%M-%S")
+        filename = f"{timestamp}_{species}.wav"
+        export_dir = self.file_path / "Exported_Clips"
+        export_dir.mkdir(exist_ok=True)
+
+        filepath = export_dir / filename
+
+        try:
+            sf.write(filepath, self.part, self.sr)
+            QMessageBox.information(self, "Export Successful", f"Clip exported to:\n{filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Could not write file:\n{e}")
 
     def activate_buttons(self):
         self.goodID.setEnabled(True)
@@ -370,6 +491,8 @@ class AudioAnalysis(QMainWindow):
         self.goodID.setEnabled(False)
         self.badID.setEnabled(False)
         self.repeat.setEnabled(False)
+        self.left_arrow.setEnabled(False)
+        self.right_arrow.setEnabled(False)
 
     @QtCore.pyqtSlot(Path, str)
     def run_analysis(self, f, t):
@@ -427,7 +550,6 @@ class AudioAnalysis(QMainWindow):
                 behavior_df = pd.read_csv(self.file_path / 'behavior_dict.csv', index_col=0)
                 behavior = behavior_df.to_dict("split")
                 self.behavior = dict(zip(behavior["index"], [row[0] for row in behavior["data"]]))
-                print(self.behavior)
 
         # tick counter
         self.period_counter = self.period_counter + 1 # starts at 0
@@ -460,8 +582,6 @@ class AudioAnalysis(QMainWindow):
                 selection_df = pd.concat(selection_df_list, ignore_index=True)
             self.selection_df_final = []
 
-            print(selection_df)
-
             if 'Confidence' in selection_df.columns:
                 selection_df.rename(columns={'Confidence':'Score'}, inplace=True)
 
@@ -488,7 +608,7 @@ class AudioAnalysis(QMainWindow):
                     self.audio_files[file] = librosa.load(wav_path[0])
                     progress = int((index + 1) / total_files * 100)
                     self.progress.setValue(progress)
-                self.first_sound()
+                self.next_sound(new_species=True, first_sound=True, forward=True)
 
             else:
                 self.output.at[self.period_counter, 'Complete'] = 'Yes'
