@@ -588,7 +588,7 @@ class AudioAnalysis(QMainWindow):
             if 'Common Name' in selection_df.columns:
                 selection_df.rename(columns={'Common Name':'Label'}, inplace=True)
 
-            if 'Label' in selection_df.columns:
+            if 'Label' in selection_df.columns and not all(selection_df['Label'].str.islower()):
                 for index, row in selection_df.iterrows():
                     if not row['Label'].islower(): # weird bug in Raven Pro where sometimes species names are abbreviated ex: baleag == Bald Eagle
                         self.selection_df_final.append(row)
