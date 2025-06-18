@@ -11,11 +11,11 @@ import webbrowser
 import re
 from PyQt5 import QtCore
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QImage
+from PyQt5.QtGui import QPixmap, QImage, QIcon
 from PyQt5.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox, qApp,
     QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider, QDockWidget, QRadioButton, QButtonGroup, QAction,
-    QHBoxLayout
+    QHBoxLayout, QDialog
 )
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -33,14 +33,14 @@ class SoundThread(QtCore.QThread):
         sd.play(self.y, self.sr)
         sd.wait()
 
-class Settings(QMainWindow):
+class Settings(QDialog):
     runAnalysis = QtCore.pyqtSignal(Path, str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.time = None
         self.file_path = None
-
+        self.setWindowTitle('Load Files')
         # dropdown to select timeframe
         self.times = QComboBox()
         self.times.addItem('Select Timeframe of Interest')
@@ -57,9 +57,7 @@ class Settings(QMainWindow):
         lay.addWidget(start)
         start.pressed.connect(lambda: self.load_location())
 
-        starting_widget = QWidget()
-        starting_widget.setLayout(lay)
-        self.setCentralWidget(starting_widget)
+        self.setLayout(lay)
 
     def current_text(self, _):
         self.time = self.times.currentText()
@@ -72,6 +70,7 @@ class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MissedNET: Audio Analysis")
+        self.setWindowIcon(QIcon('window_icon.png'))
         self.setFixedSize(600, 550)
         layout = QGridLayout()
 
@@ -80,9 +79,8 @@ class AudioAnalysis(QMainWindow):
 
         self.image_label = QLabel()
         layout.addWidget(self.image_label, 0, 0, 1, 7, Qt.AlignHCenter)
-        pixmap = QPixmap("volume.png")
-        scaled_pixmap = pixmap.scaled(500, 300, transformMode=Qt.SmoothTransformation)
-        self.image_label.setPixmap(scaled_pixmap)
+        pixmap = QPixmap("logo.png")
+        self.image_label.setPixmap(pixmap)
 
         arrow_style = """
             font-size: 36px;               /* Make triangle larger */
@@ -131,7 +129,7 @@ class AudioAnalysis(QMainWindow):
 
         self.goodID = QPushButton('Good Identification')
         self.goodID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        self.goodID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #D0D991') # green
+        self.goodID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #8ab1ff')
         self.badID = QPushButton('Not Confirmed')
         self.badID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.badID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #F2D5CE') # red
@@ -226,6 +224,7 @@ class AudioAnalysis(QMainWindow):
         self.volume.setFocusPolicy(Qt.NoFocus)
         self.volume.setValue(20)
         self.volume.setFixedWidth(30)
+        self.volume.setStyleSheet("QSlider::handle:horizontal {background-color: #5488ff;}")
 
         vol_label = QLabel()
         pixmap=QPixmap("volume.png")
@@ -243,6 +242,8 @@ class AudioAnalysis(QMainWindow):
         central_widget = QWidget()
         central_widget.setLayout(layout)
         self.setCentralWidget(central_widget)
+
+        self.disable_buttons()
 
         self.output: DataFrame | None = None
         self.file_path: Path | None = None
@@ -264,6 +265,8 @@ class AudioAnalysis(QMainWindow):
 
 
     def start(self) -> None:
+        self.show()
+
         self.settings.show()
         self.setFocusPolicy(Qt.StrongFocus)
         self.setFocus()
@@ -486,6 +489,8 @@ class AudioAnalysis(QMainWindow):
         self.goodID.setEnabled(True)
         self.badID.setEnabled(True)
         self.repeat.setEnabled(True)
+        self.open_web.setEnabled(True)
+        self.export_clip.setEnabled(True)
 
     def disable_buttons(self):
         self.goodID.setEnabled(False)
@@ -493,6 +498,8 @@ class AudioAnalysis(QMainWindow):
         self.repeat.setEnabled(False)
         self.left_arrow.setEnabled(False)
         self.right_arrow.setEnabled(False)
+        self.open_web.setEnabled(False)
+        self.export_clip.setEnabled(False)
 
     @QtCore.pyqtSlot(Path, str)
     def run_analysis(self, f, t):
