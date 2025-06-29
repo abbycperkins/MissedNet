@@ -331,11 +331,11 @@ class AudioAnalysis(QMainWindow):
             return  # No behavior set — skip logic
 
         if behavior == 'blacklist':
-            self.output.at[self.period_counter, label] = 'Failed Verification'
+            self.output.at[self.period_counter, label] = 'Blacklisted'
             self.increment_species()
 
         elif behavior == 'whitelist':
-            self.output.at[self.period_counter, label] = 'Confirmed Present'
+            self.output.at[self.period_counter, label] = 'Whitelisted'
             self.increment_species()
 
         elif behavior == 'graylist':
@@ -354,18 +354,23 @@ class AudioAnalysis(QMainWindow):
             if pd.notnull(last_date) and pd.notnull(current_date):
                 delta = (current_date - last_date).days
                 if delta < 7:
-                    self.output.at[self.period_counter, label] = 'Confirmed Present'
+                    self.output.at[self.period_counter, label] = 'Graylisted'
                     self.increment_species()
 
-    def increment_species(self):
+    def increment_species(self, first_sound: bool=False):
+        if first_sound:
+            self.species_counter = -1
+            self.message.setText('Species Progress for Period:')
+
         self.species_counter = self.species_counter + 1
         progress = int(self.species_counter / len(self.species_list) * 100)
         self.progress.setValue(progress)
         self.counter = 0
 
-        if self.species_counter == len(self.species_list):
+        if self.species_counter >= len(self.species_list):
             self.output.at[self.period_counter, 'Complete'] = 'Yes'
             self.initialize_period()
+            return
         else:
             self.species_detections = self.selection_df_final[
                 self.selection_df_final['Label'] == self.species_list[self.species_counter]
@@ -373,20 +378,32 @@ class AudioAnalysis(QMainWindow):
 
             self.detection = self.species_detections.iloc[self.counter]
 
+        # Update behavior button
+        chosen = self.behavior.get(self.detection['Label'])
+
+        if chosen == 'blacklist':
+            self.black.setChecked(True)
+        elif chosen == 'whitelist':
+            self.white.setChecked(True)
+        elif chosen == 'graylist':
+            self.gray.setChecked(True)
+        else:
+            self.default.setChecked(True)
+
+        previous_species_counter = self.species_counter
         self.check_behavior_criteria()
+        if self.species_counter != previous_species_counter:
+            return
+
         species_text = f"{self.detection['Label']}"
         self.species_label.setText(species_text)
+        self.next_sound(new_species=True)
 
-    def next_sound(self, new_species: bool, forward: bool = True, first_sound: bool = False) -> None:
-        if first_sound:
-            self.species_counter = -1
-            self.increment_species()
-            self.message.setText('Species Progress for Period:')
+    def next_sound(self, new_species: bool, forward: bool = True) -> None:
+        print("Next Sound")
 
         self.disable_buttons()
         self.volume.setValue(20)
-        checked_button = self.dock_buttons.checkedButton()
-        self.behavior[self.detection['Label']] = checked_button.objectName()
 
         if not new_species:
             index_adjustment = 1 if forward else -1
@@ -394,10 +411,12 @@ class AudioAnalysis(QMainWindow):
 
         #Get specific detection
         self.detection = self.species_detections.iloc[self.counter]
+        print(self.detection)
 
         # Update info label
         info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
         self.info_label.setText(info_text)
+
         self.play_sound()
 
     def detection_decision(self, good_id: bool):
@@ -405,8 +424,10 @@ class AudioAnalysis(QMainWindow):
             self.output.at[self.period_counter, self.detection['Label']] = 'Confirmed Present'
         else:
             self.output.at[self.period_counter, self.detection['Label']] = 'Failed Verification'
+
+        checked_button = self.dock_buttons.checkedButton()
+        self.behavior[self.detection['Label']] = checked_button.objectName()
         self.increment_species()
-        self.next_sound(new_species=True)
 
     def plot_spec(self):
         d = librosa.amplitude_to_db(np.abs(librosa.stft(self.part, n_fft=512)), ref=np.max)
@@ -424,18 +445,7 @@ class AudioAnalysis(QMainWindow):
 
     def play_sound(self):
         self.disable_buttons()
-
-        # Update behavior button
-        chosen = self.behavior.get(self.detection['Label'])
-        if chosen == 'blacklist':
-            self.black.setChecked(True)
-        elif chosen == 'whitelist':
-            self.white.setChecked(True)
-        elif chosen == 'graylist':
-            self.gray.setChecked(True)
-        else:
-            self.default.setChecked(True)
-
+        print("Play Sound")
         start_time = self.detection['Begin Time (s)']
         end_time = self.detection['End Time (s)']
         y, self.sr = self.audio_files[self.detection['File']]
@@ -615,11 +625,12 @@ class AudioAnalysis(QMainWindow):
                     self.audio_files[file] = librosa.load(wav_path[0])
                     progress = int((index + 1) / total_files * 100)
                     self.progress.setValue(progress)
-                self.next_sound(new_species=True, first_sound=True, forward=True)
+                print("Initialize Period")
+                self.increment_species(first_sound=True)
 
             else:
                 self.output.at[self.period_counter, 'Complete'] = 'Yes'
-                self.output.drop(columns='PATH').to_csv(self.file_path / 'results.csv', index=False)
+                self.output.to_csv(self.file_path / 'results.csv', index=False)
                 self.initialize_period()
 
 
