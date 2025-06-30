@@ -411,7 +411,6 @@ class AudioAnalysis(QMainWindow):
 
         #Get specific detection
         self.detection = self.species_detections.iloc[self.counter]
-        print(self.detection)
 
         # Update info label
         info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
@@ -425,6 +424,7 @@ class AudioAnalysis(QMainWindow):
         else:
             self.output.at[self.period_counter, self.detection['Label']] = 'Failed Verification'
 
+        print(self.output)
         checked_button = self.dock_buttons.checkedButton()
         self.behavior[self.detection['Label']] = checked_button.objectName()
         self.increment_species()
@@ -613,7 +613,7 @@ class AudioAnalysis(QMainWindow):
                 self.species_list = self.selection_df_final.loc[:, 'Label'].unique()
 
                 for spec in self.species_list:
-                    if 'spec' in self.output.columns:
+                    if spec in self.output.columns:
                         continue
                     else: self.output[spec] = ''
 
