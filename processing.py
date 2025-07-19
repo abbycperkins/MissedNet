@@ -64,7 +64,10 @@ class Settings(QDialog):
 
     def load_location(self):
         self.file_path = Path(str(QFileDialog.getExistingDirectory(self, 'Select Directory')))
-        self.runAnalysis.emit(self.file_path, self.time)
+        selection_path = self.file_path / 'Selections'
+        data_path = self.file_path / 'Data'
+        if selection_path.is_dir() & data_path.is_dir():
+            self.runAnalysis.emit(self.file_path, self.time)
 
 class AudioAnalysis(QMainWindow):
     def __init__(self):
@@ -413,7 +416,10 @@ class AudioAnalysis(QMainWindow):
         self.detection = self.species_detections.iloc[self.counter]
 
         # Update info label
-        info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
+        if self.time == "Day":
+            info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]} | {self.output.at[self.period_counter, 'Date']}"
+        else:
+            info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
         self.info_label.setText(info_text)
 
         self.play_sound()
@@ -432,7 +438,7 @@ class AudioAnalysis(QMainWindow):
     def plot_spec(self):
         d = librosa.amplitude_to_db(np.abs(librosa.stft(self.part, n_fft=512)), ref=np.max)
         plt.figure(figsize=(5, 3))
-        librosa.display.specshow(d, y_axis='linear', sr=self.sr, x_axis='time', cmap = 'gist_yarg')
+        librosa.display.specshow(d, y_axis='linear', sr=self.sr, x_axis='time', cmap = 'gist_yarg', hop_length=128)
         plt.colorbar(format="%+2.f dB")
         plt.tight_layout()
         plt.savefig("temp_image.png", bbox_inches='tight', pad_inches=0, dpi=300, transparent=True)
@@ -607,8 +613,18 @@ class AudioAnalysis(QMainWindow):
 
             if 'Label' in selection_df.columns and not all(selection_df['Label'].str.islower()):
                 for index, row in selection_df.iterrows():
+                    label = row['Label']
+                    behavior = self.behavior.get(label)
+
+                    if behavior == 'blacklist':
+                        self.output.at[self.period_counter, label] = 'Blacklisted'
+                        continue
+                    if behavior == 'whitelist':
+                        self.output.at[self.period_counter, label] = 'Whitelisted'
+                        continue
                     if not row['Label'].islower(): # weird bug in Raven Pro where sometimes species names are abbreviated ex: baleag == Bald Eagle
                         self.selection_df_final.append(row)
+
                 self.selection_df_final = pd.DataFrame(self.selection_df_final)
                 self.species_list = self.selection_df_final.loc[:, 'Label'].unique()
 
@@ -617,10 +633,11 @@ class AudioAnalysis(QMainWindow):
                         continue
                     else: self.output[spec] = ''
 
-                total_files = len(period_files['PATH'])
+                total_files = len(self.selection_df_final.loc[:, 'File'].unique())
                 self.audio_files = {}
+
                 self.message.setText('Loading Audio Files...')
-                for index, file in enumerate(period_files['PATH']):
+                for index, file in enumerate(self.selection_df_final.loc[:, 'File'].unique()):
                     wav_path = list(self.data_path.glob(f'*{file}*'))
                     self.audio_files[file] = librosa.load(wav_path[0])
                     progress = int((index + 1) / total_files * 100)
