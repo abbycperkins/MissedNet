@@ -626,6 +626,13 @@ class AudioAnalysis(QMainWindow):
                         self.selection_df_final.append(row)
 
                 self.selection_df_final = pd.DataFrame(self.selection_df_final)
+
+                if 'Label' not in self.selection_df_final.columns:
+                    self.output.at[self.period_counter, 'Complete'] = 'Yes'
+                    self.output.to_csv(self.file_path / 'results.csv', index=False)
+                    self.initialize_period()
+                    return
+
                 self.species_list = self.selection_df_final.loc[:, 'Label'].unique()
 
                 for spec in self.species_list:
