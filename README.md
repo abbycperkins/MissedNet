@@ -1,6 +1,6 @@
 # MissedNet: Audio Analysis Tool
 
-A PyQt5-based desktop application for analyzing and verifying bird audio detections from acoustic monitoring data.
+A PyQt6-based desktop application for analyzing and verifying bird audio detections from acoustic monitoring data.
 
 ![MissedNet Logo](logo.png)
 
@@ -18,11 +18,11 @@ A PyQt5-based desktop application for analyzing and verifying bird audio detecti
 
 ### Prerequisites
 
-- Python 3.7 - 3.12
+- Python 3.7+
 - Required Python packages (install via pip):
 
 ```bash
-pip install pandas librosa sounddevice soundfile matplotlib numpy PyQt5
+pip install pandas librosa sounddevice soundfile matplotlib numpy PyQt6
 ```
 
 ### Setup
@@ -86,7 +86,7 @@ Access the **Advanced Options** panel to set species behavior:
 
 **Audio Files** (in `Data/` folder):
 - Format: `.wav`
-- Naming convention: `ID_YYYYMMDD_HHMMSS.wav`
+- Naming convention: `ID_YYYYMMDD_HHMMSS.wav` (default for Wildlife Acoustics SongMeter)
 
 **Selection Files** (in `Selections/` folder):
 - Format: Tab-delimited text files
