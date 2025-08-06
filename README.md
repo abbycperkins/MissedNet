@@ -29,7 +29,7 @@ pip install pandas librosa sounddevice soundfile matplotlib numpy PyQt5
 
 1. Clone this repository:
 ```bash
-git clone [https://github.com/abbycperkins/missednet.git](https://github.com/abbycperkins/MissedNet.git)
+git clone https://github.com/abbycperkins/MissedNet.git
 cd missednet
 ```
 
