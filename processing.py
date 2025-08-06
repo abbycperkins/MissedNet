@@ -9,18 +9,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 import webbrowser
 import re
-from PyQt5 import QtCore
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QPixmap, QImage, QIcon
-from PyQt5.QtWidgets import (
-    QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox, qApp,
-    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider, QDockWidget, QRadioButton, QButtonGroup, QAction,
+from PyQt6 import QtCore
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QIcon, QAction
+from PyQt6.QtWidgets import (
+    QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox,
+    QGridLayout, QSizePolicy, QProgressBar, QStatusBar, QSlider, QDockWidget, QRadioButton, QButtonGroup,
     QHBoxLayout, QDialog
 )
 from datetime import datetime, timedelta
 from pathlib import Path
 from pandas import DataFrame
+import os
 
+os.environ["QT_QPA_PLATFORM"] = "windows:darkmode=0"
 
 class SoundThread(QtCore.QThread):
     def __init__(self, y, sr, vol):
@@ -74,14 +76,14 @@ class AudioAnalysis(QMainWindow):
         super().__init__()
         self.setWindowTitle("MissedNET: Audio Analysis")
         self.setWindowIcon(QIcon('window_icon.png'))
-        self.setFixedSize(600, 550)
+        self.setFixedSize(600, 600)
         layout = QGridLayout()
 
         self.settings = Settings(self)
         self.settings.runAnalysis.connect(self.run_analysis)
 
         self.image_label = QLabel()
-        layout.addWidget(self.image_label, 0, 0, 1, 7, Qt.AlignHCenter)
+        layout.addWidget(self.image_label, 0, 0, 1, 7, Qt.AlignmentFlag.AlignHCenter)
         pixmap = QPixmap("logo.png")
         self.image_label.setPixmap(pixmap)
 
@@ -112,7 +114,7 @@ class AudioAnalysis(QMainWindow):
         # Create the species label
         self.species_label = QLabel("Species Name")
         self.species_label.setStyleSheet("font-size: 24px; font-weight: bold;")
-        self.species_label.setAlignment(Qt.AlignCenter)
+        self.species_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         # Combine into horizontal layout
         species_layout = QHBoxLayout()
@@ -128,13 +130,13 @@ class AudioAnalysis(QMainWindow):
         self.info_label = QLabel("Score 0.### | Detection #/#")
         self.info_label.setStyleSheet("font-size: 16px; font-weight: bold;")
 
-        layout.addWidget(self.info_label, 2, 0, 1, 6, Qt.AlignHCenter)
+        layout.addWidget(self.info_label, 2, 0, 1, 6, Qt.AlignmentFlag.AlignHCenter)
 
         self.goodID = QPushButton('Good Identification')
-        self.goodID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.goodID.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.goodID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #8ab1ff')
         self.badID = QPushButton('Not Confirmed')
-        self.badID.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.badID.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.badID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #F2D5CE') # red
         self.repeat = QPushButton('Replay Clip')
         self.repeat.setStyleSheet('font-size: 14px')
@@ -157,7 +159,7 @@ class AudioAnalysis(QMainWindow):
         layout.addWidget(self.status, 5, 0, 1, 7)
 
         self.dock = QDockWidget('Advanced Options')
-        self.addDockWidget(Qt.RightDockWidgetArea, self.dock)
+        self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
 
         self.dock_content = QWidget()
         self.dock_layout = QVBoxLayout(self.dock_content)
@@ -224,17 +226,17 @@ class AudioAnalysis(QMainWindow):
         vol_layout = QVBoxLayout()
 
         self.volume = QSlider()
-        self.volume.setFocusPolicy(Qt.NoFocus)
+        self.volume.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.volume.setValue(20)
         self.volume.setFixedWidth(30)
         self.volume.setStyleSheet("QSlider::handle:horizontal {background-color: #5488ff;}")
 
         vol_label = QLabel()
         pixmap=QPixmap("volume.png")
-        scaled_pixmap = pixmap.scaled(int(284/6), int(162/6), transformMode=Qt.SmoothTransformation)
+        scaled_pixmap = pixmap.scaled(int(284/6), int(162/6), transformMode=Qt.TransformationMode.SmoothTransformation)
         vol_label.setPixmap(scaled_pixmap)
         vol_layout.addWidget(vol_label)
-        vol_layout.addWidget(self.volume, alignment = Qt.AlignHCenter)
+        vol_layout.addWidget(self.volume, alignment = Qt.AlignmentFlag.AlignHCenter)
 
         layout.addLayout(vol_layout, 1, 6, 4, 1)
 
@@ -271,19 +273,19 @@ class AudioAnalysis(QMainWindow):
         self.show()
 
         self.settings.show()
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setFocus()
 
     def keyPressEvent(self, event):
         key = event.key()
 
-        if key == Qt.Key_Left and self.left_arrow.isEnabled():
+        if key == Qt.Key.Key_Left and self.left_arrow.isEnabled():
             self.left_arrow.click()
-        elif key == Qt.Key_Right and self.right_arrow.isEnabled():
+        elif key == Qt.Key.Key_Right and self.right_arrow.isEnabled():
             self.right_arrow.click()
-        elif key in (Qt.Key_Enter, Qt.Key_Return) and self.goodID.isEnabled():
+        elif key in (Qt.Key.Key_Enter, Qt.Key_Return) and self.goodID.isEnabled():
             self.goodID.click()
-        elif key == Qt.Key_Backspace and self.badID.isEnabled():
+        elif key == Qt.Key.Key_Backspace and self.badID.isEnabled():
             self.badID.click()
 
     def position_dock(self):
@@ -403,8 +405,6 @@ class AudioAnalysis(QMainWindow):
         self.next_sound(new_species=True)
 
     def next_sound(self, new_species: bool, forward: bool = True) -> None:
-        print("Next Sound")
-
         self.disable_buttons()
         self.volume.setValue(20)
 
@@ -430,7 +430,6 @@ class AudioAnalysis(QMainWindow):
         else:
             self.output.at[self.period_counter, self.detection['Label']] = 'Failed Verification'
 
-        print(self.output)
         checked_button = self.dock_buttons.checkedButton()
         self.behavior[self.detection['Label']] = checked_button.objectName()
         self.increment_species()
@@ -445,13 +444,11 @@ class AudioAnalysis(QMainWindow):
         plt.close()
 
         pixmap = QPixmap("temp_image.png")
-        scaled_pixmap = pixmap.scaled(500, 300, transformMode=Qt.SmoothTransformation)
+        scaled_pixmap = pixmap.scaled(500, 300, transformMode=Qt.TransformationMode.SmoothTransformation)
         self.image_label.setPixmap(scaled_pixmap)
-        # qApp.processEvents()
 
     def play_sound(self):
         self.disable_buttons()
-        print("Play Sound")
         start_time = self.detection['Begin Time (s)']
         end_time = self.detection['End Time (s)']
         y, self.sr = self.audio_files[self.detection['File']]
@@ -587,10 +584,10 @@ class AudioAnalysis(QMainWindow):
         if self.period_counter == self.output.shape[0]: # check if final period completed
             self.close()
             msg = QMessageBox()
-            msg.setStandardButtons(QMessageBox.Ok)
+            msg.setStandardButtons(QMessageBox.StandardButton.Ok)
             msg.setText('Audio Analysis completed! Quit and view your output file.')
             msg.setWindowTitle('Complete!')
-            msg.exec_()
+            msg.exec()
         else:
             selection_df_list = []
             self.audio_files = {}
@@ -649,7 +646,6 @@ class AudioAnalysis(QMainWindow):
                     self.audio_files[file] = librosa.load(wav_path[0])
                     progress = int((index + 1) / total_files * 100)
                     self.progress.setValue(progress)
-                print("Initialize Period")
                 self.increment_species(first_sound=True)
 
             else:
@@ -662,4 +658,4 @@ if __name__ == '__main__':
     app = QApplication(sys.argv)
     main = AudioAnalysis()
     main.start()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
