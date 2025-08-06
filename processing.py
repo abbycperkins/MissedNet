@@ -22,7 +22,16 @@ from pathlib import Path
 from pandas import DataFrame
 import os
 
+
 os.environ["QT_QPA_PLATFORM"] = "windows:darkmode=0"
+
+def resource_path(relative_path):
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 class SoundThread(QtCore.QThread):
     def __init__(self, y, sr, vol):
@@ -75,7 +84,7 @@ class AudioAnalysis(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("MissedNET: Audio Analysis")
-        self.setWindowIcon(QIcon('window_icon.png'))
+        self.setWindowIcon(QIcon(resource_path('window_icon.png')))
         self.setFixedSize(600, 600)
         layout = QGridLayout()
 
@@ -84,7 +93,7 @@ class AudioAnalysis(QMainWindow):
 
         self.image_label = QLabel()
         layout.addWidget(self.image_label, 0, 0, 1, 7, Qt.AlignmentFlag.AlignHCenter)
-        pixmap = QPixmap("logo.png")
+        pixmap = QPixmap(resource_path("logo.png"))
         self.image_label.setPixmap(pixmap)
 
         arrow_style = """
@@ -232,7 +241,7 @@ class AudioAnalysis(QMainWindow):
         self.volume.setStyleSheet("QSlider::handle:horizontal {background-color: #5488ff;}")
 
         vol_label = QLabel()
-        pixmap=QPixmap("volume.png")
+        pixmap=QPixmap(resource_path("volume.png"))
         scaled_pixmap = pixmap.scaled(int(284/6), int(162/6), transformMode=Qt.TransformationMode.SmoothTransformation)
         vol_label.setPixmap(scaled_pixmap)
         vol_layout.addWidget(vol_label)
@@ -283,7 +292,7 @@ class AudioAnalysis(QMainWindow):
             self.left_arrow.click()
         elif key == Qt.Key.Key_Right and self.right_arrow.isEnabled():
             self.right_arrow.click()
-        elif key in (Qt.Key.Key_Enter, Qt.Key_Return) and self.goodID.isEnabled():
+        elif key in (Qt.Key.Key_Enter, Qt.Key.Key_Return) and self.goodID.isEnabled():
             self.goodID.click()
         elif key == Qt.Key.Key_Backspace and self.badID.isEnabled():
             self.badID.click()
