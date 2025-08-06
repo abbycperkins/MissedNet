@@ -10,8 +10,8 @@ A PyQt5-based desktop application for analyzing and verifying bird audio detecti
 - **Flexible Time Periods**: Analyze data by day, week, or month
 - **Smart Behavior Lists**: Implement blacklists, whitelists, and graylists for species management
 - **Spectrogram Visualization**: View audio spectrograms for each detection
-- **Export Functionality**: Export verified clips with timestamps
-- **Progress Tracking**: Resume analysis from where you left off
+- **Export Functionality**: Export verified (or uncertain!) clips with timestamps
+- **Progress Tracking**: Resume analysis from the most recent finished period
 - **Keyboard Shortcuts**: Navigate efficiently with arrow keys and hotkeys
 
 ## Installation
@@ -29,7 +29,7 @@ pip install pandas librosa sounddevice soundfile matplotlib numpy PyQt5
 
 1. Clone this repository:
 ```bash
-git clone https://github.com/yourusername/missednet.git
+git clone [https://github.com/abbycperkins/missednet.git](https://github.com/abbycperkins/MissedNet.git)
 cd missednet
 ```
 
