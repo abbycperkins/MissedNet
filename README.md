@@ -18,7 +18,7 @@ A PyQt5-based desktop application for analyzing and verifying bird audio detecti
 
 ### Prerequisites
 
-- Python 3.7+
+- Python 3.7 - 3.12
 - Required Python packages (install via pip):
 
 ```bash
