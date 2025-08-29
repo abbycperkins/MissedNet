@@ -544,6 +544,8 @@ class AudioAnalysis(QMainWindow):
         for i in all_paths:
             date_list.append(datetime.strptime(i.as_posix().split(sep='_')[-2],'%Y%m%d'))
 
+        date_list.sort()
+
         if self.time == 'Day':
             self.df['Date'] = date_list
             self.output = self.df.drop_duplicates(subset='Date')
