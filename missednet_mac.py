@@ -532,7 +532,7 @@ class AudioAnalysis(QMainWindow):
         self.data_path = self.file_path / 'Data'
 
         date_list = []
-        all_paths = list(self.data_path.glob('*'))
+        all_paths = list(self.data_path.glob('*.wav'))
         all_files = [i.name for i in all_paths]
         names_only = [i.replace('.wav', '') for i in all_files]
         all_files_glob = [f'*{i}*' for i in names_only]
