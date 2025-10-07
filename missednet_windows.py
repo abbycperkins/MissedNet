@@ -479,16 +479,13 @@ class AudioAnalysis(QMainWindow):
 
         species = self.detection['Label'].replace(" ", "_").replace("'", "")
         begin_seconds = self.detection['Begin Time (s)']
-        print(species)
         # Get base recording time from the filename
         # Assumes format like: ID_20240612_054213.wav
         raw_filename = self.detection['File']
-        print(raw_filename)
         date_time_match = re.search(r'(\d{8})_(\d{6})', raw_filename)
 
         if date_time_match:
             date_str = date_time_match.group(1)  # '20240612'
-            print(date_str)
             time_str = date_time_match.group(2)  # '054213'
             dt = datetime.strptime(date_str + time_str, '%Y%m%d%H%M%S')
             obs_time = dt + timedelta(seconds=begin_seconds)
@@ -497,7 +494,6 @@ class AudioAnalysis(QMainWindow):
             return
 
         timestamp = obs_time.strftime("%Y-%m-%d_%H-%M-%S")
-        print(timestamp)
         filename = f"{timestamp}_{species}.wav"
         export_dir = self.file_path / "Exported_Clips"
         export_dir.mkdir(exist_ok=True)
