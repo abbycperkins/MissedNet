@@ -549,9 +549,9 @@ class AudioAnalysis(QMainWindow):
 
         if self.time == 'Day':
             self.df['Date'] = date_list
+            self.df.sort_values(by=['Date'], ascending=True, inplace=True)
             self.output = self.df.drop_duplicates(subset='Date')
             self.output = self.output.reset_index(drop=True)
-            self.df.sort_values(by=['Date'], ascending=True, inplace=True)
 
         if self.time == 'Week':
             week_list = []
