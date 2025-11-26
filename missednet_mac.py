@@ -288,15 +288,21 @@ class AudioAnalysis(QMainWindow):
 
         if key == Qt.Key.Key_Left and self.left_arrow.isEnabled():
             self.left_arrow.click()
+            event.accept()
         elif key == Qt.Key.Key_Right and self.right_arrow.isEnabled():
             self.right_arrow.click()
+            event.accept()
         elif key in (Qt.Key.Key_Enter, Qt.Key.Key_Return) and self.goodID.isEnabled():
             self.goodID.click()
+            event.accept()
         elif key == Qt.Key.Key_Backspace and self.badID.isEnabled():
             self.badID.click()
+            event.accept()
+        else:
+            event.ignore()
 
     def position_dock(self):
-        main_geom = self.geometry()
+        main_geom = self.frameGeometry()
         dock_width = 200
         dock_height = 150
 
@@ -525,6 +531,9 @@ class AudioAnalysis(QMainWindow):
     def run_analysis(self, f, t):
         self.settings.hide()
         self.show()
+        self.activateWindow()
+        self.raise_()
+        self.setFocus()
         self.file_path = f
         self.time = t
 
