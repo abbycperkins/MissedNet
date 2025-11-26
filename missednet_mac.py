@@ -532,7 +532,7 @@ class AudioAnalysis(QMainWindow):
         self.data_path = self.file_path / 'Data'
 
         date_list = []
-        all_paths = list(self.data_path.glob('*.wav'))
+        all_paths = list(self.data_path.rglob('*.wav'))
         all_files = [i.name for i in all_paths]
         names_only = [i.replace('.wav', '') for i in all_files]
         all_files_glob = [f'*{i}*' for i in names_only]
@@ -602,9 +602,11 @@ class AudioAnalysis(QMainWindow):
 
             # Find the selection files
             period_files = self.df[self.df['Date'] == self.output.iloc[self.period_counter]['Date']]
+            period_files = period_files[~period_files['PATH'].str.startswith('._')]
+
             selection_df = DataFrame()
             for file in period_files['PATH']:
-                selection_df= pd.read_csv(list(self.selection_path.glob(f'*{file}*'))[0], delimiter='\t')
+                selection_df = pd.read_csv(list(self.selection_path.rglob(f'*{file}*'))[0], delimiter='\t')
                 selection_df['File'] = file
                 selection_df_list.append(selection_df)
                 selection_df = pd.concat(selection_df_list, ignore_index=True)
@@ -650,7 +652,7 @@ class AudioAnalysis(QMainWindow):
 
                 self.message.setText('Loading Audio Files...')
                 for index, file in enumerate(self.selection_df_final.loc[:, 'File'].unique()):
-                    wav_path = list(self.data_path.glob(f'*{file}*'))
+                    wav_path = list(self.data_path.rglob(f'*{file}*'))
                     self.audio_files[file] = librosa.load(wav_path[0])
                     progress = int((index + 1) / total_files * 100)
                     self.progress.setValue(progress)
