@@ -165,7 +165,7 @@ class AudioAnalysis(QMainWindow):
 
         layout.addWidget(self.status, 5, 0, 1, 7)
 
-        self.dock = QDockWidget('Advanced Options')
+        self.dock = QDockWidget('Listing Options')
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
 
         self.dock_content = QWidget()
@@ -177,11 +177,14 @@ class AudioAnalysis(QMainWindow):
 
         self.dock.hide()
 
-        self.toggle_dock_action = QAction("Show Advanced Options", self)
+        self.toggle_dock_action = QAction("Show Listing Options", self)
         self.toggle_dock_action.setCheckable(True)
         self.toggle_dock_action.triggered.connect(self.toggle_dock)
         self.dock.visibilityChanged.connect(self.update_toggle_button)
-        self.menuBar().addAction(self.toggle_dock_action)
+
+        bar = self.menuBar()
+        bar.setNativeMenuBar(False)
+        bar.addAction(self.toggle_dock_action)
 
         self.dock_buttons = QButtonGroup()
 
