@@ -49,6 +49,7 @@ class Settings(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.log = None
         self.time = None
         self.file_path = None
         self.setWindowTitle('Load Files')
@@ -74,7 +75,17 @@ class Settings(QDialog):
         self.time = self.times.currentText()
 
     def load_location(self):
-        self.file_path = Path(str(QFileDialog.getExistingDirectory(self, 'Select Directory')))
+        log_path = Path('log.txt')
+
+        if log_path.is_file():
+            self.log = log_path.read_text(encoding='utf-8')
+            print(self.log)
+            self.file_path = Path(str(QFileDialog.getExistingDirectory(self, 'Select Directory', directory = self.log)))
+        else:
+            self.file_path = Path(str(QFileDialog.getExistingDirectory(self, 'Select Directory')))
+
+        log_path.write_text(str(self.file_path), encoding='utf-8')
+
         selection_path = self.file_path / 'Selections'
         data_path = self.file_path / 'Data'
         if selection_path.is_dir() & data_path.is_dir():
@@ -141,24 +152,33 @@ class AudioAnalysis(QMainWindow):
 
         layout.addWidget(self.info_label, 2, 0, 1, 6, Qt.AlignmentFlag.AlignHCenter)
 
+        self.go_back = QPushButton('Back')
+        self.go_back.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+        self.go_back.setStyleSheet('font-size: 16px; font-weight: bold')
+
         self.goodID = QPushButton('Good Identification')
         self.goodID.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.goodID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #8ab1ff')
+
         self.badID = QPushButton('Not Confirmed')
         self.badID.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
         self.badID.setStyleSheet('font-size: 16px; font-weight: bold; background-color: #F2D5CE') # red
+
         self.repeat = QPushButton('Replay Clip')
         self.repeat.setStyleSheet('font-size: 14px')
+
         self.open_web = QPushButton('Open Audio Examples')
         self.open_web.setStyleSheet('font-size: 14px')
 
-        layout.addWidget(self.goodID, 4, 0, 1, 3)
+        layout.addWidget(self.go_back, 4, 0, 1, 1)
+        layout.addWidget(self.goodID, 4, 1, 1, 2)
         layout.addWidget(self.badID, 4, 3, 1, 3)
         layout.addWidget(self.repeat, 3, 2, 1, 2)
         layout.addWidget(self.open_web, 3, 4, 1, 2)
 
         self.goodID.pressed.connect(lambda: self.detection_decision(good_id=True))
         self.badID.pressed.connect(lambda: self.detection_decision(good_id=False))
+        self.go_back.pressed.connect(lambda: self.increment_species(first_sound=False, previous_species=True))
         self.repeat.pressed.connect(lambda: self.play_sound())
         self.open_web.pressed.connect(lambda: self.open_website())
 
@@ -167,7 +187,7 @@ class AudioAnalysis(QMainWindow):
 
         layout.addWidget(self.status, 5, 0, 1, 7)
 
-        self.dock = QDockWidget('Advanced Options')
+        self.dock = QDockWidget('Listing Options')
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
 
         self.dock_content = QWidget()
@@ -179,7 +199,7 @@ class AudioAnalysis(QMainWindow):
 
         self.dock.hide()
 
-        self.toggle_dock_action = QAction("Show Advanced Options", self)
+        self.toggle_dock_action = QAction("Show Listing Options", self)
         self.toggle_dock_action.setCheckable(True)
         self.toggle_dock_action.triggered.connect(self.toggle_dock)
         self.dock.visibilityChanged.connect(self.update_toggle_button)
@@ -322,20 +342,22 @@ class AudioAnalysis(QMainWindow):
 
     def update_toggle_button(self, visible):
         if visible:
-            self.toggle_dock_action.setText("Hide Advanced Options")
+            self.toggle_dock_action.setText("Hide Listing Options")
         else:
-            self.toggle_dock_action.setText("Show Advanced Options")
+            self.toggle_dock_action.setText("Show Listing Options")
 
     def open_website(self):
         species = self.detection['Label'].replace("'", "").replace(" ", "_")
         url = f'https://www.allaboutbirds.org/guide/{species}/sounds'
-        webbrowser.open(url)
+        webbrowser.open(url, new=0)
 
     def arrow_activation(self):
         # Disable left arrow if at first detection
         self.left_arrow.setEnabled(self.counter > 0)
         # Disable right arrow if at last detection
         self.right_arrow.setEnabled(self.counter < len(self.species_detections) - 1)
+        # Disable back button if at first species of the period
+        self.go_back.setEnabled(self.species_counter > 0)
 
     def check_behavior_criteria(self):
         label = self.detection['Label']
@@ -371,12 +393,16 @@ class AudioAnalysis(QMainWindow):
                     self.output.at[self.period_counter, label] = 'Graylisted'
                     self.increment_species()
 
-    def increment_species(self, first_sound: bool=False):
+    def increment_species(self, first_sound: bool=False, previous_species: bool=False) -> None:
         if first_sound:
             self.species_counter = -1
             self.message.setText('Species Progress for Period:')
 
-        self.species_counter = self.species_counter + 1
+        if previous_species:
+            self.species_counter = self.species_counter - 1
+        else:
+            self.species_counter = self.species_counter + 1
+
         progress = int(self.species_counter / len(self.species_list) * 100)
         self.progress.setValue(progress)
         self.counter = 0
@@ -405,7 +431,10 @@ class AudioAnalysis(QMainWindow):
             self.default.setChecked(True)
 
         previous_species_counter = self.species_counter
-        self.check_behavior_criteria()
+
+        if not previous_species:
+            self.check_behavior_criteria()
+
         if self.species_counter != previous_species_counter:
             return
 
@@ -507,6 +536,7 @@ class AudioAnalysis(QMainWindow):
             QMessageBox.critical(self, "Export Failed", f"Could not write file:\n{e}")
 
     def activate_buttons(self):
+        self.go_back.setEnabled(True)
         self.goodID.setEnabled(True)
         self.badID.setEnabled(True)
         self.repeat.setEnabled(True)
@@ -514,6 +544,7 @@ class AudioAnalysis(QMainWindow):
         self.export_clip.setEnabled(True)
 
     def disable_buttons(self):
+        self.go_back.setEnabled(False)
         self.goodID.setEnabled(False)
         self.badID.setEnabled(False)
         self.repeat.setEnabled(False)
