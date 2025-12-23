@@ -316,6 +316,14 @@ class AudioAnalysis(QMainWindow):
             self.goodID.click()
         elif key == Qt.Key.Key_Backspace and self.badID.isEnabled():
             self.badID.click()
+        elif key == Qt.Key.Key_R and self.repeat.isEnabled():
+            self.repeat.click()
+        elif key == Qt.Key.Key_E and self.export_clip.isEnabled():
+            self.export_clip.click()
+        elif key == Qt.Key.Key_O and self.open_web.isEnabled():
+            self.open_web.click()
+        else:
+            event.ignore()
 
     def position_dock(self):
         main_geom = self.geometry()
