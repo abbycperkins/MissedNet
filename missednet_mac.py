@@ -468,7 +468,15 @@ class AudioAnalysis(QMainWindow):
 
         # Update info label
         if self.time == "Day":
-            info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]} | {self.output.at[self.period_counter, 'Date']}"
+            raw_filename = self.detection['File']
+            date_time_match = re.search(r'(\d{8})_(\d{6})', raw_filename)
+            date_str = date_time_match.group(1)  # '20240612'
+            time_str = date_time_match.group(2)  # '054213'
+            dt = datetime.strptime(date_str + time_str, '%Y%m%d%H%M%S')
+            begin_seconds = self.detection['Begin Time (s)']
+            obs_time = dt + timedelta(seconds=begin_seconds)
+            timestamp = obs_time.strftime("%Y-%m-%d %H:%M:%S")
+            info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]} | {timestamp}"
         else:
             info_text = f"Score: {self.detection['Score']} | Detection {self.counter + 1}/{self.species_detections.shape[0]}"
         self.info_label.setText(info_text)
