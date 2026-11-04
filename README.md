@@ -18,7 +18,7 @@ A PyQt6 desktop application for analyzing and verifying audio detections from ac
 
 ### Prerequisites
 
-- Python 3.7+ (3.13 recommended)
+- Python 3.10+ (3.13 recommended)
 
 ### Setup
 
