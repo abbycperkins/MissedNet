@@ -1,6 +1,6 @@
 # MissedNet: Audio Analysis Tool
 
-A PyQt6-based desktop application for analyzing and verifying bird audio detections from acoustic monitoring data.
+A PyQt6 desktop application for analyzing and verifying audio detections from acoustic monitoring data. The user confirms detections, and MissedNet creates a species presence matrix from audio files for the selected time period (day, week, month). 
 
 ![MissedNet Logo](logo.png)
 
@@ -18,29 +18,24 @@ A PyQt6-based desktop application for analyzing and verifying bird audio detecti
 
 ### Prerequisites
 
-- Python 3.7+
-- Required Python packages (install via pip):
-
-```bash
-pip install pandas librosa sounddevice soundfile matplotlib numpy PyQt6
-```
+- Python 3.7+ (3.13 recommended)
 
 ### Setup
 
-1. Clone this repository:
+Clone this repository:
 ```bash
-git clone https://github.com/abbycperkins/MissedNet.git
-cd missednet
+https://github.com/abbycperkins/MissedNet.git
 ```
 
-2. Ensure you have the required image assets:
-   - `logo.png` - Application logo
-   - `window_icon.png` - Window icon
-   - `volume.png` - Volume control icon
-
-3. Run the application:
+2. Install required packages: 
 ```bash
-python audio_analysis.py
+pandas
+librosa
+sounddevice
+soundfile
+matplotlib
+numpy
+PyQt6
 ```
 
 ## Usage
@@ -62,7 +57,7 @@ project_folder/
 2. **Select Timeframe**: Choose Day, Week, or Month analysis
 3. **Choose Directory**: Select your project folder containing Data and Selections subdirectories
 4. **Review Detections**: Listen to each detection and classify as:
-   - ✅ **Good Identification**: Confirmed species presence
+   - ✅ **Good Identification**: Confirmed species presence for the time period
    - ❌ **Not Confirmed**: Failed verification
 
 ### Keyboard Shortcuts
@@ -70,10 +65,13 @@ project_folder/
 - **←/→ Arrow Keys**: Navigate between detections
 - **Enter**: Mark as "Good Identification"
 - **Backspace**: Mark as "Not Confirmed"
+- **R**: Replay current audio clip
+- **E**: Export current audio clip
+- **O**: Open audio examples (All About Birds)
 
-### Advanced Options
+### Listing Options
 
-Access the **Advanced Options** panel to set species behavior:
+Access the **Show Listing Options** panel to set species behavior:
 
 - **Default**: Check every detection period
 - **Blacklist**: Assume species never present (skip all detections)
@@ -119,10 +117,11 @@ Access the **Advanced Options** panel to set species behavior:
 - Adjustable volume control
 - Threaded playback to prevent UI freezing
 - Automatic replay functionality
+- "Back" button to reanalyze previous species detection in case of mistake
 
 ### Export Clips
 - Export individual detections as timestamped WAV files
-- Filename format: `YYYY-MM-DD_HH-MM-SS_Species_Name.wav`
+- Filename format: `YYYY-MM-DD_HH-MM-SS_Putative_Species_Name.wav`
 - Preserves original audio quality
 
 ### Web Integration
@@ -131,11 +130,11 @@ Access the **Advanced Options** panel to set species behavior:
 
 ## License
 
-This project is licensed under the GNU General Public License v3.0 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- Built with PyQt5 for the user interface
+- Built with PyQt6
 - Audio processing powered by librosa
 - Spectrogram visualization using matplotlib
 - Audio playback via sounddevice
