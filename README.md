@@ -40,15 +40,30 @@ PyQt6
 
 ## Usage
 
+### Device Compatibility
+
+Designed for use on either Windows or Mac: 
+
+Windows:
+```bash
+missednet_windows.py
+```
+
+Mac:
+```bash
+missednet_mac.py
+```
+
 ### Directory Structure
 
-Your analysis directory should contain:
+Your analysis directory should/will contain:
 ```
 project_folder/
 ├── Data/           # Audio files (.wav)
 ├── Selections/     # Detection files (.txt/.csv)
-├── results.csv     # Output results (created automatically)
-└── behavior_dict.csv # Behavior settings (created automatically)
+├── Exported_Clips/ # Exported clips (created automatically upon start)
+├── results.csv     # Output results (created automatically upon start)
+└── behavior_dict.csv # Behavior settings (created automatically upon start)
 ```
 
 ### Getting Started
