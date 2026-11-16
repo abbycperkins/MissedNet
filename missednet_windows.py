@@ -10,7 +10,7 @@ import numpy as np
 import webbrowser
 import re
 from PyQt6 import QtCore
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QPixmap, QIcon, QAction
 from PyQt6.QtWidgets import (
     QWidget, QMainWindow, QApplication, QVBoxLayout, QLabel, QPushButton, QMessageBox, QFileDialog, QComboBox,
@@ -359,14 +359,6 @@ class AudioAnalysis(QMainWindow):
         url = f'https://www.allaboutbirds.org/guide/{species}/sounds'
         webbrowser.open(url, new=0)
 
-    def arrow_activation(self):
-        # Disable left arrow if at first detection
-        self.left_arrow.setEnabled(self.counter > 0)
-        # Disable right arrow if at last detection
-        self.right_arrow.setEnabled(self.counter < len(self.species_detections) - 1)
-        # Disable back button if at first species of the period
-        self.go_back.setEnabled(self.species_counter > 0)
-
     def check_behavior_criteria(self):
         label = self.detection['Label']
         behavior = self.behavior.get(label)
@@ -402,6 +394,7 @@ class AudioAnalysis(QMainWindow):
                     self.increment_species()
 
     def increment_species(self, first_sound: bool=False, previous_species: bool=False) -> None:
+        sd.stop()
         if first_sound:
             self.species_counter = -1
             self.message.setText('Species Progress for Period:')
@@ -451,6 +444,7 @@ class AudioAnalysis(QMainWindow):
         self.next_sound(new_species=True)
 
     def next_sound(self, new_species: bool, forward: bool = True) -> None:
+        sd.stop()
         self.disable_buttons()
         self.volume.setValue(20)
 
@@ -479,6 +473,7 @@ class AudioAnalysis(QMainWindow):
         self.play_sound()
 
     def detection_decision(self, good_id: bool):
+        sd.stop()
         if good_id:
             self.output.at[self.period_counter, self.detection['Label']] = 'Confirmed Present'
         else:
@@ -502,6 +497,7 @@ class AudioAnalysis(QMainWindow):
         self.image_label.setPixmap(scaled_pixmap)
 
     def play_sound(self):
+        sd.stop()
         self.disable_buttons()
         start_time = self.detection['Begin Time (s)']
         end_time = self.detection['End Time (s)']
@@ -514,8 +510,7 @@ class AudioAnalysis(QMainWindow):
 
         self.worker = SoundThread(self.part, self.sr, v)
         self.worker.start()
-        self.worker.finished.connect(self.activate_buttons)
-        self.worker.finished.connect(self.arrow_activation)
+        QTimer.singleShot(1000, self.activate_buttons)
 
     def export_current_clip(self):
         if self.part is None or self.detection is None:
@@ -558,6 +553,13 @@ class AudioAnalysis(QMainWindow):
         self.repeat.setEnabled(True)
         self.open_web.setEnabled(True)
         self.export_clip.setEnabled(True)
+
+        # Disable left arrow if at first detection
+        self.left_arrow.setEnabled(self.counter > 0)
+        # Disable right arrow if at last detection
+        self.right_arrow.setEnabled(self.counter < len(self.species_detections) - 1)
+        # Disable back button if at first species of the period
+        self.go_back.setEnabled(self.species_counter > 0)
 
     def disable_buttons(self):
         self.go_back.setEnabled(False)
